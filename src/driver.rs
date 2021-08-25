@@ -264,7 +264,7 @@ mod tests {
 
         for i in 0..keys_vec.len() {
 
-            let mut core = SealCoreState::init(
+            let core = SealCoreState::init(
                 keys_vec[i].0,
                 keys_vec[i].1,
                 votes.clone(),
