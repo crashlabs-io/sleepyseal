@@ -1,4 +1,3 @@
-
 //! Defines the state of the passive consensus core.
 
 use crate::base_types::*;
@@ -105,8 +104,9 @@ impl SealCoreState {
                     let data = BlockData::from(b"XXX".to_vec());
                     let new_current_round_data = DriverRequest::empty(request.instance, round);
 
-                     // Save the current state here
-                    let old_current_round_data = replace(&mut self.current_round_data, new_current_round_data);
+                    // Save the current state here
+                    let old_current_round_data =
+                        replace(&mut self.current_round_data, new_current_round_data);
                     self.store_archive_state(&old_current_round_data);
 
                     self.insert_own_block(data, new_round_certs)?;

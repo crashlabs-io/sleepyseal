@@ -1,5 +1,3 @@
-
-
 //! Defines the consensus data structures to build a shared DAG.
 
 use std::collections::BTreeMap;

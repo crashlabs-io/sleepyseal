@@ -1,5 +1,3 @@
-
-
 //! Defines the basic types to do crypto, committees and hold basic information.
 
 use std::borrow::Borrow;
@@ -74,9 +72,39 @@ pub struct VotingPower {
 }
 
 impl VotingPower {
+    pub fn get_votes(&self, a: &Address) -> Option<u64> {
+        return self.votes.get(a).cloned();
+    }
+
+    /// The amount of stake to ensure that any two sets with that amount
+    /// intersect on an honest node (honest unit of stake.)
     pub fn quorum_size(&self) -> u64 {
         let one_third = self.total_votes / 3;
         2 * one_third + 1
+    }
+
+    /// The amount of stake to ensure at least one unit of stake is
+    /// controlled by an honest node (honest vote).
+    pub fn one_honest_size(&self) -> u64 {
+        let one_third = self.total_votes / 3;
+        one_third + 1
+    }
+
+    /// Checks if an iterator of the form (Addr, _) represents
+    /// votes forming a quorum
+    pub fn sum_stake<'a, X, I>(&self, vals: I) -> u64
+    where
+        I: Iterator<Item = (&'a Address, X)>,
+    {
+        let mut votes = 0;
+        for (addr, _) in vals {
+            if !self.votes.contains_key(addr) {
+                continue;
+            }
+            votes += self.votes[addr];
+        }
+
+        votes
     }
 
     /// Checks if an iterator of the form (Addr, _) represents
@@ -85,15 +113,16 @@ impl VotingPower {
     where
         I: Iterator<Item = (&'a Address, X)>,
     {
-        let mut votes = 0;
-        for (addr, _) in vals {
-            if !self.votes.contains_key(addr) {
-                return false;
-            }
-            votes += self.votes[addr];
-        }
+        self.sum_stake(vals) >= self.quorum_size()
+    }
 
-        votes >= self.quorum_size()
+    /// Checks if an iterator of the form (Addr, _) represents
+    /// votes containing at least one honest node.
+    pub fn has_one_honest<'a, X, I>(&self, vals: I) -> bool
+    where
+        I: Iterator<Item = (&'a Address, X)>,
+    {
+        self.sum_stake(vals) >= self.one_honest_size()
     }
 }
 
@@ -135,6 +164,7 @@ mod tests {
             .into_iter()
             .collect();
         assert!(votes.quorum_size() == 3);
+        assert!(votes.one_honest_size() == 2);
 
         let hm: HashMap<Address, _> = vec![([0; 32], 'a'), ([1; 32], 'b'), ([2; 32], 'c')]
             .into_iter()

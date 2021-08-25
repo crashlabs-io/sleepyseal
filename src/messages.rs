@@ -1,5 +1,3 @@
-
-
 //! Defines the messages passed between passive cores and drivers.
 
 use std::collections::{BTreeMap, HashMap};
@@ -255,6 +253,47 @@ impl DriverRequest {
             .flatten()
             .collect();
         all_certs
+    }
+
+    /// Given the evidence in this message / state extract which certificates
+    /// from the previous round have strong support in this round. Strong support
+    /// means that a certificate from the previous round is included in at least
+    /// f+1 certified blocks in the current round.
+    /// 
+    /// Returns the set of addresses with blocks in the previous round that have strong 
+    /// support, and the total amount of stake of certs that were available to do the
+    /// calculation.
+    pub fn strong_support(&self, committee: &VotingPower) -> (Vec<Address>, u64) {
+        let mut total_stake_count = 0;
+        let full_certs = self.extract_full_certs(committee);
+        let mut stake_count: BTreeMap<_, _> = self
+            .extract_prev_certs()
+            .into_iter()
+            .map(|(a, _)| (a, 0))
+            .collect();
+        for (a, cert) in &full_certs {
+            if let Some(header) = self.block_headers.get(a) {
+                // Must have a full cert for this block
+                if cert.0.block_header_digest != header.digest() {
+                    continue;
+                };
+
+                // Aggregate the stake
+                for (inner_a, _prev_cert) in &header.block_certificates {
+                    *stake_count.get_mut(inner_a).unwrap() +=
+                        committee.get_votes(a).expect("Address Exists!");
+                }
+
+                total_stake_count += committee.get_votes(a).expect("Address exists");
+            }
+        }
+
+        let prev_block_with_enough_stake: Vec<_> = stake_count
+            .into_iter()
+            .filter(|(_, s)| *s >= committee.one_honest_size())
+            .map(|(a, _)| a)
+            .collect();
+        (prev_block_with_enough_stake, total_stake_count)
     }
 
     /// Extract a driver request that uses the certificates from previous blocks to force progress to the current round.

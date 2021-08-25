@@ -71,7 +71,7 @@ impl DriverCore {
             return None;
         }
 
-        // Make a request for the previous round, with this quorum of certs, to 
+        // Make a request for the previous round, with this quorum of certs, to
         // move a passive core forward.
 
         // Note: it is safe to take round-1, since a round = 0 state cannot have
@@ -237,33 +237,23 @@ mod tests {
         let move_to_1 = driver.move_to_latest_round_request().unwrap();
         assert!(move_to_1.check_request_valid(&votes).is_ok());
         assert!(move_to_1.check_request_valid(&votes).unwrap() == RequestValidState::CertQuorum(0));
-        
-
     }
 
-
-    
-    #[test] 
+    #[test]
     fn test_progress_at_random() {
-
         let mut keys_vec = Vec::new();
         let mut states_vec = Vec::new();
 
         for _ in 0..4 {
             let (pk, sk) = gen_keypair();
             keys_vec.push((pk, sk))
-
         }
 
-        let votes: VotingPower = keys_vec
-            .iter()
-            .map(|(pk, _)| (*pk, 1))
-            .collect();
+        let votes: VotingPower = keys_vec.iter().map(|(pk, _)| (*pk, 1)).collect();
 
         let instance = [0; 16];
 
         for i in 0..keys_vec.len() {
-
             let core = SealCoreState::init(
                 keys_vec[i].0,
                 keys_vec[i].1,
@@ -279,19 +269,71 @@ mod tests {
         let mut latest = 0;
         let mut driver = DriverCore::new(instance, votes.clone());
         for r in 0..1000 {
-
             let i = r % keys_vec.len();
-            
-            driver.add_response(keys_vec[i].0, &states_vec[i].current_round_data).unwrap();
+
+            driver
+                .add_response(keys_vec[i].0, &states_vec[i].current_round_data)
+                .unwrap();
             if let Some(cert_message) = driver.create_aggregate_response() {
                 states_vec[i].update_state(&cert_message).unwrap();
             }
 
-            println!("Round of core{} = {}", i, &states_vec[i].current_round_data.round);
+            println!(
+                "Round of core{} = {}",
+                i, &states_vec[i].current_round_data.round
+            );
             latest = states_vec[i].current_round_data.round;
         }
 
         assert!(latest > 50);
+    }
 
+    #[test]
+    fn test_progress_one_crash() {
+        let mut keys_vec = Vec::new();
+        let mut states_vec = Vec::new();
+
+        for _ in 0..4 {
+            let (pk, sk) = gen_keypair();
+            keys_vec.push((pk, sk))
+        }
+
+        let votes: VotingPower = keys_vec.iter().map(|(pk, _)| (*pk, 1)).collect();
+
+        let instance = [0; 16];
+
+        for i in 0..keys_vec.len() {
+            let core = SealCoreState::init(
+                keys_vec[i].0,
+                keys_vec[i].1,
+                votes.clone(),
+                instance,
+                BlockData::from(b"ABC0".to_vec()),
+            );
+
+            states_vec.push(core);
+        }
+
+        // The client state
+        let mut latest = 0;
+        let mut driver = DriverCore::new(instance, votes.clone());
+        for r in 0..1000 {
+            let i = r % (keys_vec.len() - 1);
+
+            driver
+                .add_response(keys_vec[i].0, &states_vec[i].current_round_data)
+                .unwrap();
+            if let Some(cert_message) = driver.create_aggregate_response() {
+                states_vec[i].update_state(&cert_message).unwrap();
+            }
+
+            println!(
+                "Round of core{} = {}",
+                i, &states_vec[i].current_round_data.round
+            );
+            latest = states_vec[i].current_round_data.round;
+        }
+
+        assert!(latest > 50);
     }
 }
