@@ -12,20 +12,28 @@ use std::collections::HashMap;
 
 pub type GasUnit = u64;
 
-
+/// A client account contains a balance that is local to this 
+/// passive core. As clients post transactions the balance is
+/// lowered.
 pub struct ClientAccount {
     /// Balance in gas.
     balance : GasUnit,
 }
 
+
+/// A structure represneting a transaction that is either waiting
+/// to be included in a block, or included and waiting for a 
+/// confirmation that the block is included / excluded.
 pub struct PendingTransaction {
-    time_received : u64,
+    _time_received : u64,
     client_origin : Address,
     transaction : Vec<u8>,
     inclusion_round : Option<RoundID>,
     gas_per_byte : GasUnit,
 }
 
+/// A mempool holds client balances, and transactions waiting to be included 
+/// or confirmed.
 pub struct Mempool {
     client_accounts : HashMap<Address, ClientAccount>,
     pending_inclusion : Vec<PendingTransaction>,
@@ -34,17 +42,19 @@ pub struct Mempool {
 
 impl Mempool {
 
+    /// Include a transactions into the list of pending transactions, and adjusts
+    /// (down) the user account balance.
     pub fn include_transaction(&mut self, tx : PendingTransaction) -> Fallible<()> {
         ensure!(tx.inclusion_round.is_none());
         ensure!(tx.transaction.len() < u16::MAX.into());
 
-        // TODO: Put the right timestamp in.
         self.pay_for_tx(&tx)?;
         self.pending_inclusion.push(tx);
 
         Ok(())
     }
 
+    /// Deducts the cost of including this transaction from the user account balance.
     pub fn pay_for_tx(&mut self, tx: &PendingTransaction) -> Fallible<()> {
         if !self.client_accounts.contains_key(&tx.client_origin){
             if tx.gas_per_byte == 0 {
@@ -67,6 +77,9 @@ impl Mempool {
         Ok(())
     }
 
+    /// Take a set of transactions from the pending inclusion list and add them into a block of a 
+    /// specified maximum size. The included transactions are prioritized through the gas per byte
+    /// (more expensive first). They are then shifted to the ack list, awaiting acknowledgement.
     pub fn get_data_block(&mut self, round : RoundID, block_max_size : usize ) -> Vec<u8> {
         self.pending_inclusion.sort_by(|a, b| a.gas_per_byte.partial_cmp(&b.gas_per_byte).unwrap());
 
@@ -92,6 +105,8 @@ impl Mempool {
         block
     }
 
+    /// Reverting a block takes all transactions included in that block and re-inserts them
+    /// into the pending inclusion list.
     pub fn revert_block(&mut self, round : RoundID) {
         let mut i = 0;
         while i < self.awaiting_confirmation.len() {
@@ -106,6 +121,8 @@ impl Mempool {
         }
     }
 
+    /// Confirming a block removes all transactions from that block from the ack
+    /// list, since they are now posted.
     pub fn confirm_block(&mut self, round : RoundID) {
         let mut i = 0;
         while i < self.awaiting_confirmation.len() {
