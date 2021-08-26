@@ -76,6 +76,12 @@ impl SealCoreState {
         Ok(())
     }
 
+    fn switch_and_archive_state(&mut self, new_state : DriverRequest) {
+        let old_current_round_data =
+                replace(&mut self.current_round_data, new_state);
+        self.store_archive_state(&old_current_round_data);
+    }
+
     /// Update the state given a driver request.
     pub fn update_state(&mut self, request: &DriverRequest) -> Fallible<&DriverRequest> {
         // Check fuller invarients for driver messages.
@@ -105,21 +111,16 @@ impl SealCoreState {
                     let new_current_round_data = DriverRequest::empty(request.instance, round);
 
                     // Save the current state here
-                    let old_current_round_data =
-                        replace(&mut self.current_round_data, new_current_round_data);
-                    self.store_archive_state(&old_current_round_data);
-
+                    self.switch_and_archive_state(new_current_round_data);
                     self.insert_own_block(data, new_round_certs)?;
                 }
                 RequestValidState::CertQuorum(round) => {
                     // Make new certs.
                     let new_round_certs = request.extract_full_certs(&self.committee);
 
-                    // Save the current state here
-                    self.store_archive_state(&self.current_round_data.clone());
-
                     let data = BlockData::from(b"XXX".to_vec());
-                    self.current_round_data = DriverRequest::empty(request.instance, round + 1);
+                    let new_current_round_data = DriverRequest::empty(request.instance, round + 1);
+                    self.switch_and_archive_state(new_current_round_data);
                     self.insert_own_block(data, new_round_certs)?;
                 }
             }
@@ -142,7 +143,7 @@ impl SealCoreState {
                         }
                     }
                 }
-                RequestValidState::CertQuorum(round) => {
+                RequestValidState::CertQuorum(_round) => {
                     // Make new certs.
                     let mut new_round_certs = request.extract_full_certs(&self.committee);
                     // Add certs we have stored so far
@@ -150,18 +151,21 @@ impl SealCoreState {
                     new_round_certs.extend(certs);
 
                     // Update the certs I have for this state
-                    self.current_round_data.block_certificates = new_round_certs
+                    let new_full_certs : BTreeMap<Address,PartialCertificate> = new_round_certs
                         .clone()
                         .into_iter()
                         .map(|(a, c)| (a, c.0))
                         .collect();
+                    self.current_round_data.block_certificates.extend(new_full_certs.clone().into_iter());
 
-                    // Save the current state here
-                    self.store_archive_state(&self.current_round_data.clone());
-
-                    let data = BlockData::from(b"XXX".to_vec());
-                    self.current_round_data = DriverRequest::empty(request.instance, round + 1);
-                    self.insert_own_block(data, new_round_certs)?;
+                    // Note: do not automatically advance to next round -- this is to allow the passive core
+                    // to wait a bit until it may get and include the certificate of this round leader in 
+                    // a Tusk-like construction.
+                    // 
+                    // let data = BlockData::from(b"XXX".to_vec());
+                    // let new_current_round_data = DriverRequest::empty(request.instance, round + 1);
+                    // self.switch_and_archive_state(new_current_round_data);
+                    // self.insert_own_block(data, new_round_certs)?;
                 }
             }
         }
@@ -170,6 +174,27 @@ impl SealCoreState {
         self.store_archive_state(&self.current_round_data.clone());
         Ok(&self.current_round_data)
     }
+
+    /// Advance to new round and insert new block to initiate it.
+    pub fn advance_to_new_round(&mut self, new_round : RoundID) -> Fallible<()>{
+
+        // Check that we are not already past the round, this can happen if we receive
+        // lots and lots of updates at the same time.
+        ensure!(new_round == self.current_round_data.round + 1, "Not correct round any more");
+
+        // Ensure we have enough certificates to move to next round
+        let prev_round_certs = self.current_round_data.extract_full_certs(&self.committee);
+        ensure!(self.committee.has_quorum(prev_round_certs.iter()), "Ensure we have a quorum to move to next round.");
+
+        // Make a new block and advance the round.
+        let data = BlockData::from(b"XXX".to_vec());
+        let new_current_round_data = DriverRequest::empty(self.current_round_data.instance, new_round);
+        self.switch_and_archive_state(new_current_round_data);
+        self.insert_own_block(data, prev_round_certs)?;
+
+        Ok(())
+    }
+
 }
 
 #[cfg(test)]

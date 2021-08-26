@@ -224,7 +224,12 @@ mod tests {
                 == RequestValidState::CertQuorum(0)
         );
 
+        assert!(core3.advance_to_new_round(1).is_err());
         assert!(core3.update_state(&cert_message).is_ok());
+        assert!(core3.current_round_data.round == 0);
+
+        // After we explicitely advance, now it is 1
+        assert!(core3.advance_to_new_round(1).is_ok());
         assert!(core3.current_round_data.round == 1);
 
         // Now add the response from 1
@@ -276,11 +281,14 @@ mod tests {
                 .unwrap();
             if let Some(cert_message) = driver.create_aggregate_response() {
                 states_vec[i].update_state(&cert_message).unwrap();
+                let new_round_id = states_vec[i].current_round_data.round + 1;
+                let _ = states_vec[i].advance_to_new_round(new_round_id);
             }
 
             println!(
                 "Round of core{} = {}",
-                i, &states_vec[i].current_round_data.round
+                i, &states_vec[i].current_round_data.round,
+
             );
             latest = states_vec[i].current_round_data.round;
         }
@@ -325,6 +333,8 @@ mod tests {
                 .unwrap();
             if let Some(cert_message) = driver.create_aggregate_response() {
                 states_vec[i].update_state(&cert_message).unwrap();
+                let new_round_id = states_vec[i].current_round_data.round + 1;
+                let _ = states_vec[i].advance_to_new_round(new_round_id);
             }
 
             println!(
