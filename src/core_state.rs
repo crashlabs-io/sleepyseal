@@ -95,6 +95,18 @@ impl SealCoreState {
 
         // Newer round request moves state to new round
         if request.round > self.current_round_data.round {
+
+            // When we receive a header or cert quorum from a future round
+            // we also always receive enough evidence to enter the future round.
+            // Furthermore, we should enter the round and produce a block as quickly
+            // as possible, and without waiting potentially for a leader block, since
+            // at least 2f+1 others would have waited (incl. f+1 honest.) -- so its
+            // likely the leader for this round was dead.
+
+            // When we are late we also do not include any data into the new block 
+            // we create, since it is very likely that it may not be included in any
+            // consensus (if we are very late).
+
             match state {
                 RequestValidState::None => unreachable!(),
                 RequestValidState::HeaderQuorum(round) => {
@@ -107,7 +119,7 @@ impl SealCoreState {
                         new_round_certs.extend(certs);
                     }
 
-                    let data = BlockData::from(b"XXX".to_vec());
+                    let data = BlockData::from(vec![]);
                     let new_current_round_data = DriverRequest::empty(request.instance, round);
 
                     // Save the current state here
@@ -118,7 +130,7 @@ impl SealCoreState {
                     // Make new certs.
                     let new_round_certs = request.extract_full_certs(&self.committee);
 
-                    let data = BlockData::from(b"XXX".to_vec());
+                    let data = BlockData::from(vec![]);
                     let new_current_round_data = DriverRequest::empty(request.instance, round + 1);
                     self.switch_and_archive_state(new_current_round_data);
                     self.insert_own_block(data, new_round_certs)?;
@@ -161,11 +173,6 @@ impl SealCoreState {
                     // Note: do not automatically advance to next round -- this is to allow the passive core
                     // to wait a bit until it may get and include the certificate of this round leader in 
                     // a Tusk-like construction.
-                    // 
-                    // let data = BlockData::from(b"XXX".to_vec());
-                    // let new_current_round_data = DriverRequest::empty(request.instance, round + 1);
-                    // self.switch_and_archive_state(new_current_round_data);
-                    // self.insert_own_block(data, new_round_certs)?;
                 }
             }
         }
