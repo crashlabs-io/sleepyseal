@@ -8,6 +8,16 @@ use failure::{ensure, Fallible};
 use std::collections::{BTreeMap, HashMap};
 use std::mem::replace;
 
+/// A structure to keep track of the progress resulting from a driver operation.
+#[derive(Default)]
+pub struct ProgressMeasure {
+    rounds_ahead: u64,
+    new_bytes: u64,
+    new_headers: u64,
+    new_certs: u64,
+}
+
+/// The core state of a passive seal channel.
 pub struct SealCoreState {
     pub my_address: Address,
     pub my_secret: SigningSecretKey,
@@ -82,14 +92,19 @@ impl SealCoreState {
     }
 
     /// Update the state given a driver request.
-    pub fn update_state(&mut self, request: &DriverRequest) -> Fallible<&DriverRequest> {
+    pub fn update_state(
+        &mut self,
+        request: &DriverRequest,
+    ) -> Fallible<(&DriverRequest, ProgressMeasure)> {
         // Check fuller invarients for driver messages.
         let state = request.check_request_valid(&self.committee)?;
         ensure!(request.instance == self.current_round_data.instance);
 
+        let mut progress_meter = ProgressMeasure::default();
+
         // Old round request cannot update current state.
         if request.round < self.current_round_data.round {
-            return Ok(&self.current_round_data);
+            return Ok((&self.current_round_data, progress_meter));
         }
 
         // Newer round request moves state to new round
@@ -105,16 +120,21 @@ impl SealCoreState {
             // we create, since it is very likely that it may not be included in any
             // consensus (if we are very late).
 
+            progress_meter.rounds_ahead = self.current_round_data.round - request.round;
+
             match state {
                 RequestValidState::None => unreachable!(),
                 RequestValidState::HeaderQuorum(round) => {
                     // Make new certs.
                     let mut new_round_certs = request.extract_prev_certs();
+                    progress_meter.new_certs = new_round_certs.len() as u64;
 
                     // Check if we have some more full certs:
                     if round == self.current_round_data.round + 1 {
                         let certs = self.current_round_data.extract_full_certs(&self.committee);
+                        let certs_len = certs.len();
                         new_round_certs.extend(certs);
+                        progress_meter.new_certs = (new_round_certs.len() - certs_len) as u64;
                     }
 
                     let data = BlockData::from(vec![]);
@@ -127,6 +147,7 @@ impl SealCoreState {
                 RequestValidState::CertQuorum(round) => {
                     // Make new certs.
                     let new_round_certs = request.extract_full_certs(&self.committee);
+                    progress_meter.new_certs = new_round_certs.len() as u64;
 
                     let data = BlockData::from(vec![]);
                     let new_current_round_data = DriverRequest::empty(request.instance, round + 1);
@@ -144,6 +165,9 @@ impl SealCoreState {
                     for (a, _bh) in &request.block_headers {
                         if !self.current_round_data.block_headers.contains_key(a) {
                             // Insert and sign this header.
+                            progress_meter.new_headers += 1;
+                            progress_meter.new_bytes += _bh.data_length as u64;
+
                             self.current_round_data.merge_block_from(request, a)?;
                             self.current_round_data
                                 .block_certificates
@@ -158,17 +182,17 @@ impl SealCoreState {
                     let mut new_round_certs = request.extract_full_certs(&self.committee);
                     // Add certs we have stored so far
                     let certs = self.current_round_data.extract_full_certs(&self.committee);
+                    let cert_len = certs.len();
                     new_round_certs.extend(certs);
 
+                    progress_meter.new_certs += (new_round_certs.len() - cert_len) as u64;
+
                     // Update the certs I have for this state
-                    let new_full_certs: BTreeMap<Address, PartialCertificate> = new_round_certs
-                        .clone()
-                        .into_iter()
-                        .map(|(a, c)| (a, c.0))
-                        .collect();
+                    let new_full_certs: BTreeMap<Address, PartialCertificate> =
+                        new_round_certs.into_iter().map(|(a, c)| (a, c.0)).collect();
                     self.current_round_data
                         .block_certificates
-                        .extend(new_full_certs.clone().into_iter());
+                        .extend(new_full_certs.into_iter());
 
                     // Note: do not automatically advance to next round -- this is to allow the passive core
                     // to wait a bit until it may get and include the certificate of this round leader in
@@ -179,7 +203,7 @@ impl SealCoreState {
 
         // Save the current state here
         self.store_archive_state(&self.current_round_data.clone());
-        Ok(&self.current_round_data)
+        Ok((&self.current_round_data, progress_meter))
     }
 
     /// Advance to new round and insert new block to initiate it.
