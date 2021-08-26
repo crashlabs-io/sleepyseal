@@ -37,7 +37,7 @@ impl SealCoreState {
         };
 
         let md0 = BlockMetadata::new(instance, 0, my_address, 101);
-        let block = BlockHeader::empty(md0, digest_block_data(&data.data[..]));
+        let block = BlockHeader::empty(md0, digest_block_data(&data.data[..]), data.data.len());
         let cert = block.creator_sign_header(&my_secret).expect("No errors");
 
         core.current_round_data
@@ -68,7 +68,7 @@ impl SealCoreState {
             self.my_address,
             101,
         );
-        let mut block = BlockHeader::empty(md0, digest_block_data(&data.data[..]));
+        let mut block = BlockHeader::empty(md0, digest_block_data(&data.data[..]), data.data.len());
         block.block_certificates = prev;
         let cert = block.creator_sign_header(&self.my_secret)?;
         self.current_round_data.insert_block(&data, &block, &cert)?;
