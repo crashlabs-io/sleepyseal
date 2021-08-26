@@ -288,7 +288,6 @@ mod tests {
             println!(
                 "Round of core{} = {}",
                 i, &states_vec[i].current_round_data.round,
-
             );
             latest = states_vec[i].current_round_data.round;
         }

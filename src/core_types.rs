@@ -48,7 +48,7 @@ impl BlockMetadata {
     /// Returns the sha512 gigest of the block meta-data.
     pub fn digest(&self) -> [u8; 64] {
         let mut hasher = Sha512::default();
-        hasher.update("META");        
+        hasher.update("META");
         hasher.update(self.instance);
         hasher.update(self.round.to_le_bytes());
         hasher.update(self.creator);
@@ -75,14 +75,18 @@ pub struct BlockHeader {
     #[serde(with = "BigArray")]
     pub data_digest: BlockDataDigest,
     /// The length of the data in bytes (the unit of cost.)
-    pub data_length : usize,
+    pub data_length: usize,
     /// A map of previous block addresses to certificates.
     pub block_certificates: BTreeMap<Address, BlockCertificate>,
 }
 
 impl BlockHeader {
     /// Returns an empty block header.
-    pub fn empty(block_metadata: BlockMetadata, data_digest: BlockDataDigest, data_length : usize) -> BlockHeader {
+    pub fn empty(
+        block_metadata: BlockMetadata,
+        data_digest: BlockDataDigest,
+        data_length: usize,
+    ) -> BlockHeader {
         BlockHeader {
             block_metadata,
             data_digest,
@@ -94,7 +98,7 @@ impl BlockHeader {
     /// Returns the digest of a header (excludes the signatures in cert.)
     pub fn digest(&self) -> BlockHeaderDigest {
         let mut hasher = Sha512::default();
-        hasher.update("HEAD");    
+        hasher.update("HEAD");
         hasher.update(self.block_metadata.digest());
         hasher.update(self.data_digest);
         hasher.update(self.data_length.to_le_bytes());
@@ -151,7 +155,7 @@ impl PartialCertificate {
     /// The sha512 digest of a certificate (excludes all signatures).
     pub fn digest(&self) -> [u8; 64] {
         let mut hasher = Sha512::default();
-        hasher.update("CERT");    
+        hasher.update("CERT");
         hasher.update(self.block_metadata.digest());
         hasher.update(self.block_header_digest);
 
@@ -297,7 +301,7 @@ mod tests {
         let bh = BlockHeader {
             block_metadata,
             data_digest: [0; 64],
-            data_length : 100,
+            data_length: 100,
             block_certificates: BTreeMap::new(),
         };
 

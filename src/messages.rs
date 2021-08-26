@@ -150,10 +150,10 @@ impl DriverRequest {
 
             // The header has an associated body
             ensure!(self.block_data.contains_key(addr));
-            
+
             // The digest and length of the body match.
             let data_digest = digest_block_data(&self.block_data[addr].data);
-            ensure!(header.data_digest == data_digest); 
+            ensure!(header.data_digest == data_digest);
             ensure!(header.data_length == self.block_data[addr].data.len());
 
             // Check partial cert for header from creator
@@ -262,8 +262,8 @@ impl DriverRequest {
     /// from the previous round have strong support in this round. Strong support
     /// means that a certificate from the previous round is included in at least
     /// f+1 certified blocks in the current round.
-    /// 
-    /// Returns the set of addresses with blocks in the previous round that have strong 
+    ///
+    /// Returns the set of addresses with blocks in the previous round that have strong
     /// support, and the total amount of stake of certs that were available to do the
     /// calculation.
     pub fn strong_support(&self, committee: &VotingPower) -> (Vec<Address>, u64) {
@@ -458,7 +458,8 @@ mod tests {
 
         for (pkx, skx) in [(&pk0, &sk0), (&pk1, &sk1), (&pk2, &sk2), (&pk3, &sk3)] {
             let md0 = BlockMetadata::new(instance, round, *pkx, 101);
-            let mut bh0 = BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());
+            let mut bh0 =
+                BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());
             bh0.block_certificates = round_zero_certs.clone();
             let cert0 = bh0.creator_sign_header(skx).expect("No errors");
 

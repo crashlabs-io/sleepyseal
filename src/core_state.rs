@@ -76,9 +76,8 @@ impl SealCoreState {
         Ok(())
     }
 
-    fn switch_and_archive_state(&mut self, new_state : DriverRequest) {
-        let old_current_round_data =
-                replace(&mut self.current_round_data, new_state);
+    fn switch_and_archive_state(&mut self, new_state: DriverRequest) {
+        let old_current_round_data = replace(&mut self.current_round_data, new_state);
         self.store_archive_state(&old_current_round_data);
     }
 
@@ -95,7 +94,6 @@ impl SealCoreState {
 
         // Newer round request moves state to new round
         if request.round > self.current_round_data.round {
-
             // When we receive a header or cert quorum from a future round
             // we also always receive enough evidence to enter the future round.
             // Furthermore, we should enter the round and produce a block as quickly
@@ -103,7 +101,7 @@ impl SealCoreState {
             // at least 2f+1 others would have waited (incl. f+1 honest.) -- so its
             // likely the leader for this round was dead.
 
-            // When we are late we also do not include any data into the new block 
+            // When we are late we also do not include any data into the new block
             // we create, since it is very likely that it may not be included in any
             // consensus (if we are very late).
 
@@ -163,15 +161,17 @@ impl SealCoreState {
                     new_round_certs.extend(certs);
 
                     // Update the certs I have for this state
-                    let new_full_certs : BTreeMap<Address,PartialCertificate> = new_round_certs
+                    let new_full_certs: BTreeMap<Address, PartialCertificate> = new_round_certs
                         .clone()
                         .into_iter()
                         .map(|(a, c)| (a, c.0))
                         .collect();
-                    self.current_round_data.block_certificates.extend(new_full_certs.clone().into_iter());
+                    self.current_round_data
+                        .block_certificates
+                        .extend(new_full_certs.clone().into_iter());
 
                     // Note: do not automatically advance to next round -- this is to allow the passive core
-                    // to wait a bit until it may get and include the certificate of this round leader in 
+                    // to wait a bit until it may get and include the certificate of this round leader in
                     // a Tusk-like construction.
                 }
             }
@@ -183,25 +183,30 @@ impl SealCoreState {
     }
 
     /// Advance to new round and insert new block to initiate it.
-    pub fn advance_to_new_round(&mut self, new_round : RoundID) -> Fallible<()>{
-
+    pub fn advance_to_new_round(&mut self, new_round: RoundID) -> Fallible<()> {
         // Check that we are not already past the round, this can happen if we receive
         // lots and lots of updates at the same time.
-        ensure!(new_round == self.current_round_data.round + 1, "Not correct round any more");
+        ensure!(
+            new_round == self.current_round_data.round + 1,
+            "Not correct round any more"
+        );
 
         // Ensure we have enough certificates to move to next round
         let prev_round_certs = self.current_round_data.extract_full_certs(&self.committee);
-        ensure!(self.committee.has_quorum(prev_round_certs.iter()), "Ensure we have a quorum to move to next round.");
+        ensure!(
+            self.committee.has_quorum(prev_round_certs.iter()),
+            "Ensure we have a quorum to move to next round."
+        );
 
         // Make a new block and advance the round.
         let data = BlockData::from(b"XXX".to_vec());
-        let new_current_round_data = DriverRequest::empty(self.current_round_data.instance, new_round);
+        let new_current_round_data =
+            DriverRequest::empty(self.current_round_data.instance, new_round);
         self.switch_and_archive_state(new_current_round_data);
         self.insert_own_block(data, prev_round_certs)?;
 
         Ok(())
     }
-
 }
 
 #[cfg(test)]
