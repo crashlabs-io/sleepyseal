@@ -9,7 +9,7 @@ Most designs for BFT consensus follow the theoretical model for distributed syst
 
 Building active nodes is a nightmare, and we know this because we designed and implemented the active [Narwhal & Tusk](https://github.com/facebookresearch/narwhal) consensus core. It is very performant and correct. But has to be tuned very carefully to ensure good performance. And the tuning has to change according to the environment it operates in: the network conditions, the loads etc. Code managing the safety and liveness of the consensus is mixed, making it hard to maintain and much larger than I would like a security system to be.
 
-## Can consensus cores be (mostly) passive? 
+## Can consensus nodes be passive? 
 
 A **passive** node never initiates a network communication. For example, a simple web server does not initiate network operations: it simply waits for requests from clients, and responds to the same client with a response. However consensus protocols need nodes to communicate with each other -- how could they be passive?
 
