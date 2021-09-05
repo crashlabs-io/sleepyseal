@@ -471,7 +471,7 @@ mod tests {
         // The client state
         let mut latest = 0;
         let mut driver = DriverCore::new(instance, votes.clone());
-        for r in 0..5000 {
+        for r in 0..1000 {
             let i = r % keys_vec.len();
 
             let naive_enc = &states_vec[i].current_round_data.naive_encode();
