@@ -137,7 +137,9 @@ impl DriverCore {
                     HashMap::new(),
                 );
             }
-            empty.previous_block_certificates.extend(state.previous_block_certificates.clone());
+            empty
+                .previous_block_certificates
+                .extend(state.previous_block_certificates.clone());
         }
 
         // Do we have a quorum of headers?
@@ -207,7 +209,9 @@ impl DriverCore {
                     HashMap::new(),
                 );
             }
-            empty.previous_block_certificates.extend(state.previous_block_certificates.clone());
+            empty
+                .previous_block_certificates
+                .extend(state.previous_block_certificates.clone());
         }
 
         // Check if included headers / certs have a quorum.
@@ -346,12 +350,10 @@ mod tests {
         for r in 0..1000 {
             let i = r % keys_vec.len();
 
-
             let naive_enc = &states_vec[i].current_round_data.naive_encode();
             let compress_enc = &states_vec[i].current_round_data.compressed_encode();
 
             println!("Full: {} Compress: {}", naive_enc.len(), compress_enc.len());
-            
 
             driver
                 .add_response(keys_vec[i].0, &states_vec[i].current_round_data)
@@ -445,7 +447,7 @@ mod tests {
         let mut keys_vec = Vec::new();
         let mut states_vec = Vec::new();
 
-        for _ in 0..10 {
+        for _ in 0..7 {
             let (pk, sk) = gen_keypair();
             keys_vec.push((pk, sk))
         }
@@ -472,13 +474,10 @@ mod tests {
         for r in 0..5000 {
             let i = r % keys_vec.len();
 
-
-            /*
             let naive_enc = &states_vec[i].current_round_data.naive_encode();
             let compress_enc = &states_vec[i].current_round_data.compressed_encode();
 
             println!("Full: {} Compress: {}", naive_enc.len(), compress_enc.len());
-            */
 
             driver
                 .add_response(keys_vec[i].0, &states_vec[i].current_round_data)
@@ -503,6 +502,4 @@ mod tests {
 
         assert!(latest > 25);
     }
-
-
 }

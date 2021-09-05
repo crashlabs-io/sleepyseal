@@ -1,14 +1,14 @@
 //! Defines the messages passed between passive cores and drivers.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::io::prelude::*;
 
-use flate2::Compression;
 use flate2::write::ZlibEncoder;
+use flate2::Compression;
 
+use bincode;
 use failure::{bail, ensure, Fallible};
 use serde::{Deserialize, Serialize};
-use bincode;
 
 use crate::base_types::*;
 use crate::core_types::*;
@@ -115,7 +115,7 @@ impl DriverRequest {
 
     /// Checks all the certificates and partial certificate signatures.
     pub fn all_signatures_valid(&self) -> Fallible<()> {
-        for (_addr, block) in &self.block_headers {
+        for (_addr, _block) in &self.block_headers {
             /*
             TODO: Check old certificates.
 
@@ -135,7 +135,6 @@ impl DriverRequest {
     /// Perform only basic validity checks. This is the bar for a client to consider a state
     /// valid from a node.
     pub fn check_basic_valid(&self, committee: &VotingPower) -> Fallible<()> {
-
         // TODO: Check all previous certs.
 
         // Check each included header
@@ -156,9 +155,13 @@ impl DriverRequest {
                 ensure!(committee.has_quorum(header.block_certificates.iter()));
 
                 for (cert_addr, cert_prev_block) in &header.block_certificates {
-
                     ensure!(self.previous_block_certificates.contains_key(cert_addr));
-                    ensure!(self.previous_block_certificates[cert_addr].0.block_header_digest == *cert_prev_block);
+                    ensure!(
+                        self.previous_block_certificates[cert_addr]
+                            .0
+                            .block_header_digest
+                            == *cert_prev_block
+                    );
                 }
             } else {
                 // round == 0 => there should be no old certs
@@ -335,10 +338,10 @@ impl DriverRequest {
 
     pub fn compressed_encode(&self) -> Vec<u8> {
         let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
-       let encoded = bincode::serialize(&self).unwrap();
-       e.write_all(&encoded).unwrap();
-       let compressed_bytes = e.finish();
-       compressed_bytes.unwrap()
+        let encoded = bincode::serialize(&self).unwrap();
+        e.write_all(&encoded).unwrap();
+        let compressed_bytes = e.finish();
+        compressed_bytes.unwrap()
     }
 }
 
@@ -370,7 +373,9 @@ mod tests {
         let bh0 = BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());
         let cert0 = bh0.creator_sign_header(&sk0).expect("No errors");
 
-        empty.insert_block(data.clone(), bh0, cert0, HashMap::new()).expect("No errors");
+        empty
+            .insert_block(data.clone(), bh0, cert0, HashMap::new())
+            .expect("No errors");
         assert!(empty.check_basic_valid(&votes).is_ok()); // Basic checks ok
         assert!(empty.check_request_valid(&votes).is_err()); // Request checks not ok
 
@@ -378,14 +383,18 @@ mod tests {
         let bh0 = BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());
         let cert0 = bh0.creator_sign_header(&sk1).expect("No errors");
 
-        empty.insert_block(data.clone(), bh0, cert0, HashMap::new()).expect("No errors");
+        empty
+            .insert_block(data.clone(), bh0, cert0, HashMap::new())
+            .expect("No errors");
         assert!(empty.check_request_valid(&votes).is_err());
 
         let md0 = BlockMetadata::new(instance, round, pk2, 101);
         let bh0 = BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());
         let cert0 = bh0.creator_sign_header(&sk2).expect("No errors");
 
-        empty.insert_block(data.clone(), bh0, cert0, HashMap::new()).expect("No errors");
+        empty
+            .insert_block(data.clone(), bh0, cert0, HashMap::new())
+            .expect("No errors");
         assert!(empty.check_request_valid(&votes).is_ok());
 
         assert!(empty.check_request_valid(&votes).unwrap() == RequestValidState::HeaderQuorum(0));
@@ -485,13 +494,18 @@ mod tests {
             let md0 = BlockMetadata::new(instance, round, *pkx, 101);
             let mut bh0 =
                 BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());
-            bh0.block_certificates = round_zero_certs.iter().map(|(a,c)| (*a, c.0.block_header_digest.clone())).collect();
+            bh0.block_certificates = round_zero_certs
+                .iter()
+                .map(|(a, c)| (*a, c.0.block_header_digest.clone()))
+                .collect();
             let cert0 = bh0.creator_sign_header(skx).expect("No errors");
 
             empty.block_data.insert(*pkx, data.clone());
             empty.block_headers.insert(*pkx, bh0);
             empty.block_certificates.insert(*pkx, cert0);
-            empty.previous_block_certificates.extend(round_zero_certs.clone());
+            empty
+                .previous_block_certificates
+                .extend(round_zero_certs.clone());
         }
 
         assert!(empty.check_request_valid(&votes).is_ok());

@@ -79,9 +79,13 @@ impl SealCoreState {
             101,
         );
         let mut block = BlockHeader::empty(md0, digest_block_data(&data.data[..]), data.data.len());
-        block.block_certificates = prev.iter().map(|(a, c)| (*a, c.0.block_header_digest.clone())).collect();
+        block.block_certificates = prev
+            .iter()
+            .map(|(a, c)| (*a, c.0.block_header_digest.clone()))
+            .collect();
         let cert = block.creator_sign_header(&self.my_secret)?;
-        self.current_round_data.insert_block(data, block, cert, prev)?;
+        self.current_round_data
+            .insert_block(data, block, cert, prev)?;
 
         Ok(())
     }
