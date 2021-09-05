@@ -45,7 +45,7 @@ impl BlockMetadata {
         }
     }
 
-    /// Returns the sha512 gigest of the block meta-data.
+    /// Returns the sha512 digest of the block meta-data.
     pub fn digest(&self) -> [u8; 64] {
         let mut hasher = Sha512::default();
         hasher.update("META");

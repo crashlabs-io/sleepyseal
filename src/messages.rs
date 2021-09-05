@@ -1,9 +1,14 @@
 //! Defines the messages passed between passive cores and drivers.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::io::prelude::*;
+
+use flate2::Compression;
+use flate2::write::ZlibEncoder;
 
 use failure::{bail, ensure, Fallible};
 use serde::{Deserialize, Serialize};
+use bincode;
 
 use crate::base_types::*;
 use crate::core_types::*;
@@ -119,6 +124,7 @@ impl DriverRequest {
     /// Perform only basic validity checks. This is the bar for a client to consider a state
     /// valid from a node.
     pub fn check_basic_valid(&self, committee: &VotingPower) -> Fallible<()> {
+
         // Check each included header
         for (addr, header) in &self.block_headers {
             // Check Header
@@ -314,6 +320,18 @@ impl DriverRequest {
                 .map(|(a, c)| (a, c.0))
                 .collect(),
         })
+    }
+
+    pub fn naive_encode(&self) -> Vec<u8> {
+        bincode::serialize(&self).unwrap()
+    }
+
+    pub fn compressed_encode(&self) -> Vec<u8> {
+        let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
+       let encoded = bincode::serialize(&self).unwrap();
+       e.write_all(&encoded).unwrap();
+       let compressed_bytes = e.finish();
+       compressed_bytes.unwrap()
     }
 }
 

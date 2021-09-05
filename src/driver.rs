@@ -1,6 +1,6 @@
 // A driver is the active element that relays and aggregates messages between passive cores.
 
-//! Functions to build driver logic, that activelly drive the passive consensus cores.
+//! Functions to build driver logic, that actively drive the passive consensus cores.
 
 use failure::Fallible;
 use std::collections::{BTreeMap, HashMap};
@@ -176,7 +176,6 @@ impl DriverCore {
             .map(|(_h, c)| (c.block_metadata.creator, c.clone()))
             .collect();
 
-
         // Put all full certificates in the certificates list.
         if !self.committee.has_quorum(full_certs.iter()) {
             return None;
@@ -185,7 +184,6 @@ impl DriverCore {
         // We may need to send a list of blocks, instead
         for (_, state) in &self.latest_states {
             for (creator, block) in &state.block_headers {
-
                 // Block has no cert
                 if !full_certs.contains_key(creator) {
                     continue;
@@ -346,6 +344,13 @@ mod tests {
         for r in 0..1000 {
             let i = r % keys_vec.len();
 
+
+            let naive_enc = &states_vec[i].current_round_data.naive_encode();
+            let compress_enc = &states_vec[i].current_round_data.compressed_encode();
+
+            println!("Full: {} Compress: {}", naive_enc.len(), compress_enc.len());
+            
+
             driver
                 .add_response(keys_vec[i].0, &states_vec[i].current_round_data)
                 .unwrap();
@@ -362,7 +367,6 @@ mod tests {
                 }
             }
 
-
             if let Some(cert_message) = driver.create_aggregate_response() {
                 states_vec[i].update_state(&cert_message).unwrap();
                 let new_round_id = states_vec[i].current_round_data.round + 1;
@@ -376,7 +380,7 @@ mod tests {
             latest = states_vec[i].current_round_data.round;
 
             if latest > 25 {
-                break
+                break;
             }
         }
 
@@ -433,4 +437,70 @@ mod tests {
 
         assert!(latest > 50);
     }
+
+    #[test]
+    fn test_progress_at_random_many_nodes() {
+        let mut keys_vec = Vec::new();
+        let mut states_vec = Vec::new();
+
+        for _ in 0..100 {
+            let (pk, sk) = gen_keypair();
+            keys_vec.push((pk, sk))
+        }
+
+        let votes: VotingPower = keys_vec.iter().map(|(pk, _)| (*pk, 1)).collect();
+
+        let instance = [0; 16];
+
+        for i in 0..keys_vec.len() {
+            let core = SealCoreState::init(
+                keys_vec[i].0,
+                keys_vec[i].1,
+                votes.clone(),
+                instance,
+                BlockData::from(b"ABC0".to_vec()),
+            );
+
+            states_vec.push(core);
+        }
+
+        // The client state
+        let mut latest = 0;
+        let mut driver = DriverCore::new(instance, votes.clone());
+        for r in 0..5000 {
+            let i = r % keys_vec.len();
+
+
+            /*
+            let naive_enc = &states_vec[i].current_round_data.naive_encode();
+            let compress_enc = &states_vec[i].current_round_data.compressed_encode();
+
+            println!("Full: {} Compress: {}", naive_enc.len(), compress_enc.len());
+            */
+
+            driver
+                .add_response(keys_vec[i].0, &states_vec[i].current_round_data)
+                .unwrap();
+
+            if let Some(cert_message) = driver.create_aggregate_response() {
+                states_vec[i].update_state(&cert_message).unwrap();
+                let new_round_id = states_vec[i].current_round_data.round + 1;
+                let _ = states_vec[i].advance_to_new_round(new_round_id);
+            }
+
+            println!(
+                "Round of core{} = {}",
+                i, &states_vec[i].current_round_data.round,
+            );
+            latest = states_vec[i].current_round_data.round;
+
+            if latest > 25 {
+                break;
+            }
+        }
+
+        assert!(latest > 25);
+    }
+
+
 }
