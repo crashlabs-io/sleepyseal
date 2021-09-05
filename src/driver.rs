@@ -33,7 +33,7 @@ impl DriverCore {
 
     /// Adds a received response to the driver structure for processing.
     pub fn add_response(&mut self, source: Address, response: &DriverRequest) -> Fallible<()> {
-        // Check the basic state invarients.
+        // Check the basic state invariants.
         response.check_basic_valid(&self.committee)?;
 
         // No need to process old responses.
@@ -447,7 +447,7 @@ mod tests {
         let mut keys_vec = Vec::new();
         let mut states_vec = Vec::new();
 
-        for _ in 0..7 {
+        for _ in 0..100 {
             let (pk, sk) = gen_keypair();
             keys_vec.push((pk, sk))
         }
@@ -462,7 +462,7 @@ mod tests {
                 keys_vec[i].1,
                 votes.clone(),
                 instance,
-                BlockData::from(b"ABC0".to_vec()),
+                BlockData::from(Vec::new()),
             );
 
             states_vec.push(core);
@@ -471,19 +471,39 @@ mod tests {
         // The client state
         let mut latest = 0;
         let mut driver = DriverCore::new(instance, votes.clone());
-        for r in 0..1000 {
+        for r in 0..5000 {
             let i = r % keys_vec.len();
-
-            let naive_enc = &states_vec[i].current_round_data.naive_encode();
-            let compress_enc = &states_vec[i].current_round_data.compressed_encode();
-
-            println!("Full: {} Compress: {}", naive_enc.len(), compress_enc.len());
 
             driver
                 .add_response(keys_vec[i].0, &states_vec[i].current_round_data)
                 .unwrap();
 
             if let Some(cert_message) = driver.create_aggregate_response() {
+
+                // Measure size
+                let naive_enc = &cert_message.naive_encode();
+                let compress_enc = &cert_message.compressed_encode();
+
+                let mut req_minus_sigs = cert_message.clone();
+                for (_addr, cert) in &mut req_minus_sigs.previous_block_certificates {
+                    cert.0.signatures.clear();
+                }
+                for (_addr, cert) in &mut req_minus_sigs.block_certificates {
+                    cert.signatures.clear();
+                }
+                let no_sig_enc = req_minus_sigs.compressed_encode();
+
+                for (_addr, block) in &mut req_minus_sigs.block_headers {
+                    block.block_certificates.clear();
+                }
+                let no_cert = req_minus_sigs.compressed_encode();
+
+
+                println!("Full: {} Compress: {}", naive_enc.len(), compress_enc.len());
+                println!("No sigs compress: {} No certs compress: {}", no_sig_enc.len(), no_cert.len());
+
+
+                // Update state
                 states_vec[i].update_state(&cert_message).unwrap();
                 let new_round_id = states_vec[i].current_round_data.round + 1;
                 let _ = states_vec[i].advance_to_new_round(new_round_id);

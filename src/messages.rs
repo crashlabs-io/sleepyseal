@@ -15,7 +15,7 @@ use crate::core_types::*;
 
 /// Represents a client/driver request, containing an update to the consensus state
 /// of a node. Also used to hold the current state within a node.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct DriverRequest {
     /// The instance identifier of the consensus.
     pub instance: InstanceID,
@@ -31,7 +31,7 @@ pub struct DriverRequest {
     pub previous_block_certificates: HashMap<Address, BlockCertificate>,
 }
 
-/// The inferered type of request received.
+/// The inferred type of request received.
 #[derive(PartialEq, Clone, Serialize, Deserialize)]
 pub enum RequestValidState {
     None,
@@ -346,7 +346,7 @@ impl DriverRequest {
     }
 
     pub fn compressed_encode(&self) -> Vec<u8> {
-        let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
+        let mut e = ZlibEncoder::new(Vec::new(), Compression::fast());
         let encoded = bincode::serialize(&self).unwrap();
         e.write_all(&encoded).unwrap();
         let compressed_bytes = e.finish();

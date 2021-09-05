@@ -46,7 +46,7 @@ impl BlockMetadata {
     }
 
     /// Returns the sha512 digest of the block meta-data.
-    pub fn digest(&self) -> [u8; 64] {
+    pub fn digest(&self) -> [u8; DIGEST_SIZE] {
         let mut hasher = Sha512::default();
         hasher.update("META");
         hasher.update(self.instance);
@@ -54,8 +54,8 @@ impl BlockMetadata {
         hasher.update(self.creator);
         hasher.update(self.timestamp.to_le_bytes());
 
-        let mut result = [0; 64];
-        result.clone_from_slice(hasher.finalize().as_slice());
+        let mut result = [0; DIGEST_SIZE];
+        result.clone_from_slice(&hasher.finalize().as_slice()[0..DIGEST_SIZE]);
         result
     }
 }
@@ -63,16 +63,16 @@ impl BlockMetadata {
 /// Returns the sha512 digest of block payload data.
 pub fn digest_block_data(data: &[u8]) -> BlockDataDigest {
     let data_digest = Sha512::digest(data);
-    data_digest.as_slice().try_into().unwrap()
+    data_digest.as_slice()[0..DIGEST_SIZE].try_into().unwrap()
 }
 
 /// A block header for a particular node and round.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct BlockHeader {
     /// The block meta-data (instance, round, creator, time)
     pub block_metadata: BlockMetadata,
     /// The cryptographic digest of the data included in this block.
-    #[serde(with = "BigArray")]
+    // #[serde(with = "BigArray")]
     pub data_digest: BlockDataDigest,
     /// The length of the data in bytes (the unit of cost.)
     pub data_length: usize,
@@ -110,8 +110,9 @@ impl BlockHeader {
         // Note that we do not hash in the signatures within the
         // certificate.
 
-        let mut result = [0; 64];
-        result.clone_from_slice(hasher.finalize().as_slice());
+        // let mut result = [0; 64];
+        let mut result = [0; DIGEST_SIZE];
+        result.clone_from_slice(&hasher.finalize().as_slice()[0..DIGEST_SIZE]);
         BlockHeaderDigest(result)
     }
 
@@ -173,8 +174,8 @@ impl PartialCertificate {
         _secret: &SigningSecretKey,
     ) -> Fallible<()> {
         if !self.signatures.contains_key(signer) {
-            let keypair: Keypair = Keypair::from_bytes(_secret)?;
-            let signature: Signature = keypair.sign(&self.digest());
+            let key_pair: Keypair = Keypair::from_bytes(_secret)?;
+            let signature: Signature = key_pair.sign(&self.digest());
 
             self.signatures
                 .insert(signer.clone(), SignatureBytes::new(signature.to_bytes()));
@@ -299,7 +300,7 @@ mod tests {
 
         let bh = BlockHeader {
             block_metadata,
-            data_digest: [0; 64],
+            data_digest: [0; DIGEST_SIZE],
             data_length: 100,
             block_certificates: BTreeMap::new(),
         };

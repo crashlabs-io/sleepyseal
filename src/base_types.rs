@@ -16,11 +16,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::BigArray;
 
-pub const DIGEST_SIZE: usize = 64;
+pub const DIGEST_SIZE: usize = 32;
 
 pub type Address = [u8; PUBLIC_KEY_LENGTH];
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct BlockData {
     #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
@@ -44,7 +44,9 @@ pub type RoundID = u64;
 pub type BlockDataDigest = [u8; DIGEST_SIZE];
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
-pub struct BlockHeaderDigest(#[serde(with = "BigArray")] pub [u8; DIGEST_SIZE]);
+pub struct BlockHeaderDigest(
+    // #[serde(with = "BigArray")] 
+    pub [u8; DIGEST_SIZE]);
 
 pub type SigningSecretKey = [u8; KEYPAIR_LENGTH];
 
