@@ -147,6 +147,76 @@ impl DriverCore {
 
         None
     }
+
+    /// Extract a state that contains all full certificates for this round, as well as
+    /// all headers and data for the blocks with full certificates. Return some state if
+    /// there is a quorum of certs and blocks, otherwise None.
+    pub fn extract_full_round_state(&self) -> Option<DriverRequest> {
+        let mut empty = DriverRequest::empty(self.instance, self.latest_round);
+
+        // First create a list of all the full certificates.
+        let mut aggregate_certs: HashMap<BlockHeaderDigest, PartialCertificate> = HashMap::new();
+        for (_, state) in &self.latest_states {
+            for (_, cert) in &state.block_certificates {
+                if aggregate_certs.contains_key(&cert.block_header_digest) {
+                    let _err = aggregate_certs
+                        .get_mut(&cert.block_header_digest)
+                        .unwrap()
+                        .merge_from(cert);
+                } else {
+                    aggregate_certs.insert(cert.block_header_digest, cert.clone());
+                }
+            }
+        }
+
+        // Do we have a quorum of full certs?
+        let full_certs: HashMap<Address, PartialCertificate> = aggregate_certs
+            .iter()
+            .filter(|(_h, c)| self.committee.has_quorum(c.signatures.iter()))
+            .map(|(_h, c)| (c.block_metadata.creator, c.clone()))
+            .collect();
+
+
+        // Put all full certificates in the certificates list.
+        if !self.committee.has_quorum(full_certs.iter()) {
+            return None;
+        }
+
+        // We may need to send a list of blocks, instead
+        for (_, state) in &self.latest_states {
+            for (creator, block) in &state.block_headers {
+
+                // Block has no cert
+                if !full_certs.contains_key(creator) {
+                    continue;
+                }
+
+                // Block is for different cert
+                if !full_certs[creator].matches_block(&block) {
+                    continue;
+                }
+
+                // Block is already in new structure
+                if empty.block_headers.contains_key(creator) {
+                    continue;
+                }
+
+                // Include block in structure.
+                let _ = empty.insert_block(
+                    &state.block_data.get(creator).unwrap(),
+                    state.block_headers.get(creator).unwrap(),
+                    &full_certs.get(creator).unwrap(),
+                );
+            }
+        }
+
+        // Check if included headers / certs have a quorum.
+        if !self.committee.has_quorum(empty.block_headers.iter()) {
+            return None;
+        }
+
+        return Some(empty); // Return the quorum of headers to gather more signatures.
+    }
 }
 
 #[cfg(test)]
@@ -279,6 +349,20 @@ mod tests {
             driver
                 .add_response(keys_vec[i].0, &states_vec[i].current_round_data)
                 .unwrap();
+
+            // Lets see if we get the full round data:
+            if let Some(full_state) = driver.extract_full_round_state() {
+                println!("Full State for round {}", full_state.round);
+                let rand = RoundPseudoRandom::new(full_state.instance, &votes);
+                let leader = rand.pick_leader(full_state.round, &votes);
+                let (strong_set, _) = full_state.strong_support(&votes);
+                let leader_in = strong_set.contains(leader);
+                if leader_in {
+                    println!("Found leader: {:x?}", leader);
+                }
+            }
+
+
             if let Some(cert_message) = driver.create_aggregate_response() {
                 states_vec[i].update_state(&cert_message).unwrap();
                 let new_round_id = states_vec[i].current_round_data.round + 1;
@@ -290,9 +374,13 @@ mod tests {
                 i, &states_vec[i].current_round_data.round,
             );
             latest = states_vec[i].current_round_data.round;
+
+            if latest > 25 {
+                break
+            }
         }
 
-        assert!(latest > 50);
+        assert!(latest > 25);
     }
 
     #[test]

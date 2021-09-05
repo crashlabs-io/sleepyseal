@@ -2,11 +2,14 @@
 
 use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::iter::FromIterator;
 
 use rand::rngs::OsRng;
 
+use ed25519_dalek::Digest;
 use ed25519_dalek::Keypair;
+use ed25519_dalek::Sha512;
 use ed25519_dalek::{KEYPAIR_LENGTH, PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH};
 
 use serde::{Deserialize, Serialize};
@@ -142,6 +145,47 @@ impl FromIterator<(Address, u64)> for VotingPower {
         }
 
         VotingPower { total_votes, votes }
+    }
+}
+
+pub struct RoundPseudoRandom {
+    pub rand_seed: [u8; 64],
+}
+
+impl RoundPseudoRandom {
+    pub fn new(instance: InstanceID, committee: &VotingPower) -> RoundPseudoRandom {
+        let mut hasher = Sha512::default();
+        hasher.update("SEED");
+        hasher.update(instance);
+        for (address, voting_power) in &committee.votes {
+            hasher.update(address);
+            hasher.update(voting_power.to_le_bytes());
+        }
+
+        let mut seed = RoundPseudoRandom { rand_seed: [0; 64] };
+        seed.rand_seed
+            .clone_from_slice(hasher.finalize().as_slice());
+        seed
+    }
+
+    pub fn pick_leader<'a>(&self, round: RoundID, committee: &'a VotingPower) -> &'a Address {
+        let mut hasher = Sha512::default();
+        hasher.update(self.rand_seed);
+        hasher.update(round.to_le_bytes());
+        let index = u64::from_le_bytes(
+            hasher.finalize().as_slice()[0..8]
+                .try_into()
+                .expect("slice with incorrect length"),
+        ) % committee.total_votes;
+
+        let mut current_total = 0;
+        for (address, voting_power) in &committee.votes {
+            current_total += voting_power;
+            if current_total > index {
+                return address;
+            }
+        }
+        unreachable!();
     }
 }
 
