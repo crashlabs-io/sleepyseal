@@ -77,7 +77,7 @@ pub struct BlockHeader {
     /// The length of the data in bytes (the unit of cost.)
     pub data_length: usize,
     /// A map of previous block addresses to certificates.
-    pub block_certificates: BTreeMap<Address, BlockCertificate>,
+    pub block_certificates: BTreeMap<Address, BlockHeaderDigest>,
 }
 
 impl BlockHeader {
@@ -103,8 +103,8 @@ impl BlockHeader {
         hasher.update(self.data_digest);
         hasher.update(self.data_length.to_le_bytes());
 
-        for (_addr, cert) in &self.block_certificates {
-            hasher.update(cert.0.block_header_digest);
+        for (_addr, block_header_digest) in &self.block_certificates {
+            hasher.update(block_header_digest.0);
         }
 
         // Note that we do not hash in the signatures within the
@@ -112,7 +112,7 @@ impl BlockHeader {
 
         let mut result = [0; 64];
         result.clone_from_slice(hasher.finalize().as_slice());
-        result
+        BlockHeaderDigest(result)
     }
 
     /// The creator of the block makes the very first partial certificate
@@ -145,7 +145,6 @@ pub struct PartialCertificate {
     /// The block metadata
     pub block_metadata: BlockMetadata,
     /// The header digest (incl the block data digest)
-    #[serde(with = "BigArray")]
     pub block_header_digest: BlockHeaderDigest,
     /// The signatures supporting this certificate
     pub signatures: BTreeMap<Address, SignatureBytes>,
@@ -157,7 +156,7 @@ impl PartialCertificate {
         let mut hasher = Sha512::default();
         hasher.update("CERT");
         hasher.update(self.block_metadata.digest());
-        hasher.update(self.block_header_digest);
+        hasher.update(self.block_header_digest.0);
 
         // Note that we do not hash in the signatures within the
         // certificate.
@@ -312,7 +311,7 @@ mod tests {
         cert.all_signatures_valid()?;
 
         // Modify something
-        cert.block_header_digest[0] = 1;
+        cert.block_header_digest.0[0] = 1;
         assert!(cert.all_signatures_valid().is_err());
 
         // Add more signatures
@@ -324,7 +323,7 @@ mod tests {
         cert.all_signatures_valid()?;
 
         // Modify something
-        cert.block_header_digest[0] = 1;
+        cert.block_header_digest.0[0] = 1;
         assert!(cert.all_signatures_valid().is_err());
 
         Ok(())

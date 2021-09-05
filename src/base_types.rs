@@ -42,7 +42,11 @@ pub type InstanceID = [u8; 16];
 pub type RoundID = u64;
 
 pub type BlockDataDigest = [u8; DIGEST_SIZE];
-pub type BlockHeaderDigest = [u8; DIGEST_SIZE];
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
+pub struct BlockHeaderDigest(
+    #[serde(with = "BigArray")]
+    pub [u8; DIGEST_SIZE]);
 
 pub type SigningSecretKey = [u8; KEYPAIR_LENGTH];
 

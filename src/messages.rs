@@ -27,6 +27,8 @@ pub struct DriverRequest {
     pub block_headers: HashMap<Address, BlockHeader>,
     /// All block certificates for this round.
     pub block_certificates: HashMap<Address, PartialCertificate>,
+    /// The previous block certificates
+    pub previous_block_certificates: HashMap<Address, BlockCertificate>,
 }
 
 /// The inferered type of request received.
@@ -46,6 +48,7 @@ impl DriverRequest {
             block_data: HashMap::new(),
             block_headers: HashMap::new(),
             block_certificates: HashMap::new(),
+            previous_block_certificates: HashMap::new(),
         }
     }
 
@@ -69,16 +72,19 @@ impl DriverRequest {
     /// Insert a block incl insert or update its cert.
     pub fn insert_block(
         &mut self,
-        data: &BlockData,
-        block: &BlockHeader,
-        cert: &PartialCertificate,
+        data: BlockData,
+        block: BlockHeader,
+        cert: PartialCertificate,
+        prev_certs: HashMap<Address, BlockCertificate>,
     ) -> Fallible<()> {
         let creator = cert.block_metadata.creator;
-        self.insert_cert(cert)?;
+        self.insert_cert(&cert)?;
 
         self.block_data
             .insert(creator.clone(), BlockData::from(data.clone()));
         self.block_headers.insert(creator.clone(), block.clone());
+
+        self.previous_block_certificates.extend(prev_certs);
 
         Ok(())
     }
@@ -86,9 +92,10 @@ impl DriverRequest {
     /// Merge a block, its data, and its cert from another driver request object.
     pub fn merge_block_from(&mut self, other: &DriverRequest, creator: &Address) -> Fallible<()> {
         self.insert_block(
-            &other.block_data[creator],
-            &other.block_headers[creator],
-            &other.block_certificates[creator],
+            other.block_data[creator].clone(),
+            other.block_headers[creator].clone(),
+            other.block_certificates[creator].clone(),
+            other.previous_block_certificates.clone(),
         )?;
 
         Ok(())
@@ -109,9 +116,13 @@ impl DriverRequest {
     /// Checks all the certificates and partial certificate signatures.
     pub fn all_signatures_valid(&self) -> Fallible<()> {
         for (_addr, block) in &self.block_headers {
+            /*
+            TODO: Check old certificates.
+
             for (_addr_prev, cert) in &block.block_certificates {
                 ensure!(cert.0.all_signatures_valid().is_ok())
             }
+            */
         }
 
         for (_addr, cert) in &self.block_certificates {
@@ -124,6 +135,8 @@ impl DriverRequest {
     /// Perform only basic validity checks. This is the bar for a client to consider a state
     /// valid from a node.
     pub fn check_basic_valid(&self, committee: &VotingPower) -> Fallible<()> {
+
+        // TODO: Check all previous certs.
 
         // Check each included header
         for (addr, header) in &self.block_headers {
@@ -142,10 +155,10 @@ impl DriverRequest {
                 // Enough voting power included to create new block
                 ensure!(committee.has_quorum(header.block_certificates.iter()));
 
-                for (cert_addr, cert) in &header.block_certificates {
-                    ensure!(cert.0.block_metadata.instance == self.instance);
-                    ensure!(cert.0.block_metadata.round == self.round - 1);
-                    ensure!(cert.0.block_metadata.creator == *cert_addr);
+                for (cert_addr, cert_prev_block) in &header.block_certificates {
+
+                    ensure!(self.previous_block_certificates.contains_key(cert_addr));
+                    ensure!(self.previous_block_certificates[cert_addr].0.block_header_digest == *cert_prev_block);
                 }
             } else {
                 // round == 0 => there should be no old certs
@@ -239,13 +252,13 @@ impl DriverRequest {
     /// Extracts all the full certificates
     pub fn extract_full_certs(
         &self,
-        committe: &VotingPower,
-    ) -> BTreeMap<Address, BlockCertificate> {
-        let all_certs: BTreeMap<_, _> = self
+        committee: &VotingPower,
+    ) -> HashMap<Address, BlockCertificate> {
+        let all_certs: HashMap<_, _> = self
             .block_certificates
             .clone()
             .into_iter()
-            .filter(|(_, c)| committe.has_quorum(c.signatures.iter()))
+            .filter(|(_, c)| committee.has_quorum(c.signatures.iter()))
             .map(|(a, c)| (a, BlockCertificate(c)))
             .collect();
 
@@ -253,15 +266,8 @@ impl DriverRequest {
     }
 
     /// Extract all certificates from the previous round, embedded in the blocks.
-    pub fn extract_prev_certs(&self) -> BTreeMap<Address, BlockCertificate> {
-        let all_certs: BTreeMap<_, _> = self
-            .block_headers
-            .clone()
-            .into_iter()
-            .map(|(_a, bh)| bh.block_certificates.into_iter())
-            .flatten()
-            .collect();
-        all_certs
+    pub fn extract_prev_certs(&self) -> &HashMap<Address, BlockCertificate> {
+        &self.previous_block_certificates
     }
 
     /// Given the evidence in this message / state extract which certificates
@@ -300,7 +306,7 @@ impl DriverRequest {
         let prev_block_with_enough_stake: Vec<_> = stake_count
             .into_iter()
             .filter(|(_, s)| *s >= committee.one_honest_size())
-            .map(|(a, _)| a)
+            .map(|(a, _)| *a)
             .collect();
         (prev_block_with_enough_stake, total_stake_count)
     }
@@ -317,8 +323,9 @@ impl DriverRequest {
             block_headers: HashMap::new(),
             block_certificates: block_certificates
                 .into_iter()
-                .map(|(a, c)| (a, c.0))
+                .map(|(a, c)| (*a, c.0.clone()))
                 .collect(),
+            previous_block_certificates: HashMap::new(),
         })
     }
 
@@ -363,7 +370,7 @@ mod tests {
         let bh0 = BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());
         let cert0 = bh0.creator_sign_header(&sk0).expect("No errors");
 
-        empty.insert_block(&data, &bh0, &cert0).expect("No errors");
+        empty.insert_block(data.clone(), bh0, cert0, HashMap::new()).expect("No errors");
         assert!(empty.check_basic_valid(&votes).is_ok()); // Basic checks ok
         assert!(empty.check_request_valid(&votes).is_err()); // Request checks not ok
 
@@ -371,14 +378,14 @@ mod tests {
         let bh0 = BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());
         let cert0 = bh0.creator_sign_header(&sk1).expect("No errors");
 
-        empty.insert_block(&data, &bh0, &cert0).expect("No errors");
+        empty.insert_block(data.clone(), bh0, cert0, HashMap::new()).expect("No errors");
         assert!(empty.check_request_valid(&votes).is_err());
 
         let md0 = BlockMetadata::new(instance, round, pk2, 101);
         let bh0 = BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());
         let cert0 = bh0.creator_sign_header(&sk2).expect("No errors");
 
-        empty.insert_block(&data, &bh0, &cert0).expect("No errors");
+        empty.insert_block(data.clone(), bh0, cert0, HashMap::new()).expect("No errors");
         assert!(empty.check_request_valid(&votes).is_ok());
 
         assert!(empty.check_request_valid(&votes).unwrap() == RequestValidState::HeaderQuorum(0));
@@ -478,12 +485,13 @@ mod tests {
             let md0 = BlockMetadata::new(instance, round, *pkx, 101);
             let mut bh0 =
                 BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());
-            bh0.block_certificates = round_zero_certs.clone();
+            bh0.block_certificates = round_zero_certs.iter().map(|(a,c)| (*a, c.0.block_header_digest.clone())).collect();
             let cert0 = bh0.creator_sign_header(skx).expect("No errors");
 
             empty.block_data.insert(*pkx, data.clone());
             empty.block_headers.insert(*pkx, bh0);
             empty.block_certificates.insert(*pkx, cert0);
+            empty.previous_block_certificates.extend(round_zero_certs.clone());
         }
 
         assert!(empty.check_request_valid(&votes).is_ok());

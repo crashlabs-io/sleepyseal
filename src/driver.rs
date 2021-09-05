@@ -61,9 +61,7 @@ impl DriverCore {
     pub fn move_to_latest_round_request(&self) -> Option<DriverRequest> {
         let mut all_certs = BTreeMap::new();
         for (_, state) in &self.latest_states {
-            for (_, block) in &state.block_headers {
-                all_certs.extend(block.block_certificates.clone())
-            }
+            all_certs.extend(state.previous_block_certificates.clone())
         }
 
         // If the available certs do not make a quorum, then return None.
@@ -96,7 +94,7 @@ impl DriverCore {
                         .unwrap()
                         .merge_from(cert);
                 } else {
-                    aggregate_certs.insert(cert.block_header_digest, cert.clone());
+                    aggregate_certs.insert(cert.block_header_digest.clone(), cert.clone());
                 }
             }
         }
@@ -133,11 +131,13 @@ impl DriverCore {
 
                 // We ignore errors.
                 let _ = empty.insert_block(
-                    &state.block_data.get(a).unwrap(),
-                    state.block_headers.get(a).unwrap(),
-                    &cert,
+                    state.block_data.get(a).unwrap().clone(),
+                    state.block_headers.get(a).unwrap().clone(),
+                    cert,
+                    HashMap::new(),
                 );
             }
+            empty.previous_block_certificates.extend(state.previous_block_certificates.clone());
         }
 
         // Do we have a quorum of headers?
@@ -164,7 +164,7 @@ impl DriverCore {
                         .unwrap()
                         .merge_from(cert);
                 } else {
-                    aggregate_certs.insert(cert.block_header_digest, cert.clone());
+                    aggregate_certs.insert(cert.block_header_digest.clone(), cert.clone());
                 }
             }
         }
@@ -201,11 +201,13 @@ impl DriverCore {
 
                 // Include block in structure.
                 let _ = empty.insert_block(
-                    &state.block_data.get(creator).unwrap(),
-                    state.block_headers.get(creator).unwrap(),
-                    &full_certs.get(creator).unwrap(),
+                    state.block_data.get(creator).unwrap().clone(),
+                    state.block_headers.get(creator).unwrap().clone(),
+                    full_certs.get(creator).unwrap().clone(),
+                    HashMap::new(),
                 );
             }
+            empty.previous_block_certificates.extend(state.previous_block_certificates.clone());
         }
 
         // Check if included headers / certs have a quorum.
@@ -443,7 +445,7 @@ mod tests {
         let mut keys_vec = Vec::new();
         let mut states_vec = Vec::new();
 
-        for _ in 0..100 {
+        for _ in 0..10 {
             let (pk, sk) = gen_keypair();
             keys_vec.push((pk, sk))
         }

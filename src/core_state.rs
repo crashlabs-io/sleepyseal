@@ -51,7 +51,7 @@ impl SealCoreState {
         let cert = block.creator_sign_header(&my_secret).expect("No errors");
 
         core.current_round_data
-            .insert_block(&data, &block, &cert)
+            .insert_block(data, block, cert, HashMap::new())
             .expect("Cannot err for empty state");
         core
     }
@@ -70,7 +70,7 @@ impl SealCoreState {
     pub fn insert_own_block(
         &mut self,
         data: BlockData,
-        prev: BTreeMap<Address, BlockCertificate>,
+        prev: HashMap<Address, BlockCertificate>,
     ) -> Fallible<()> {
         let md0 = BlockMetadata::new(
             self.current_round_data.instance,
@@ -79,9 +79,9 @@ impl SealCoreState {
             101,
         );
         let mut block = BlockHeader::empty(md0, digest_block_data(&data.data[..]), data.data.len());
-        block.block_certificates = prev;
+        block.block_certificates = prev.iter().map(|(a, c)| (*a, c.0.block_header_digest.clone())).collect();
         let cert = block.creator_sign_header(&self.my_secret)?;
-        self.current_round_data.insert_block(&data, &block, &cert)?;
+        self.current_round_data.insert_block(data, block, cert, prev)?;
 
         Ok(())
     }
@@ -96,7 +96,7 @@ impl SealCoreState {
         &mut self,
         request: &DriverRequest,
     ) -> Fallible<(&DriverRequest, ProgressMeasure)> {
-        // Check fuller invarients for driver messages.
+        // Check fuller invariants for driver messages.
         let state = request.check_request_valid(&self.committee)?;
         ensure!(request.instance == self.current_round_data.instance);
 
@@ -126,7 +126,7 @@ impl SealCoreState {
                 RequestValidState::None => unreachable!(),
                 RequestValidState::HeaderQuorum(round) => {
                     // Make new certs.
-                    let mut new_round_certs = request.extract_prev_certs();
+                    let mut new_round_certs = request.extract_prev_certs().clone();
                     progress_meter.new_certs = new_round_certs.len() as u64;
 
                     // Check if we have some more full certs:
@@ -142,7 +142,7 @@ impl SealCoreState {
 
                     // Save the current state here
                     self.switch_and_archive_state(new_current_round_data);
-                    self.insert_own_block(data, new_round_certs)?;
+                    self.insert_own_block(data, new_round_certs.into_iter().collect())?;
                 }
                 RequestValidState::CertQuorum(round) => {
                     // Make new certs.
