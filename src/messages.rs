@@ -452,7 +452,7 @@ mod tests {
         assert!(empty.check_request_valid(&votes).is_err());
         let data = BlockData::from([0; 16].to_vec());
 
-        for (i, (pkx, skx)) in [(&pk0, &sk0), (&pk1, &sk1), (&pk2, &sk2), (&pk3, &sk3)].iter().enumerate() {
+        for (i, (_, skx)) in [(&pk0, &sk0), (&pk1, &sk1), (&pk2, &sk2), (&pk3, &sk3)].iter().enumerate() {
             let j : u16 = i as u16;
             let md0 = BlockMetadata::new(instance, round, j, 101);
             let bh0 = BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());
@@ -479,7 +479,7 @@ mod tests {
         let mut empty = DriverRequest::empty(instance, round);
         assert!(empty.check_request_valid(&votes).is_err());
 
-        for (i, (pkx, skx)) in [(&pk0, &sk0), (&pk1, &sk1), (&pk2, &sk2), (&pk3, &sk3)].iter().enumerate() {
+        for (i, (_, skx)) in [(&pk0, &sk0), (&pk1, &sk1), (&pk2, &sk2), (&pk3, &sk3)].iter().enumerate() {
             let j : u16 = i as u16;
             let md0 = BlockMetadata::new(instance, round, j, 101);
             let bh0 = BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());
@@ -499,7 +499,7 @@ mod tests {
         let mut empty = DriverRequest::empty(instance, round);
         assert!(empty.check_request_valid(&votes).is_err());
 
-        for (i, (pkx, skx)) in [(&pk0, &sk0), (&pk1, &sk1), (&pk2, &sk2), (&pk3, &sk3)].iter().enumerate() {
+        for (i, (_, skx)) in [(&pk0, &sk0), (&pk1, &sk1), (&pk2, &sk2), (&pk3, &sk3)].iter().enumerate() {
             let j : u16 = i as u16;
             let md0 = BlockMetadata::new(instance, round, j, 101);
             let mut bh0 =

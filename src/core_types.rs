@@ -320,7 +320,7 @@ mod tests {
 
         // Add more signatures
         let mut cert = bh.creator_sign_header(&sk)?;
-        let (pk2, sk2) = gen_keypair();
+        let (_, sk2) = gen_keypair();
         cert.add_own_signature(&0, &sk2)?;
 
         // Check the signature work
