@@ -242,7 +242,7 @@ mod tests {
 
         let instance = [0; 16];
         let mut core0 = SealCoreState::init(
-            pk0,
+            0,
             sk0,
             votes.clone(),
             instance,
@@ -250,21 +250,21 @@ mod tests {
         );
         assert!(core0.current_round_data.check_basic_valid(&votes).is_ok());
         let mut core1 = SealCoreState::init(
-            pk1,
+            1,
             sk1,
             votes.clone(),
             instance,
             BlockData::from(b"ABC1".to_vec()),
         );
         let mut core2 = SealCoreState::init(
-            pk2,
+            2,
             sk2,
             votes.clone(),
             instance,
             BlockData::from(b"ABC2".to_vec()),
         );
         let mut core3 = SealCoreState::init(
-            pk3,
+            3,
             sk3,
             votes.clone(),
             instance,
@@ -272,11 +272,11 @@ mod tests {
         );
 
         let mut driver = DriverCore::new(instance, votes.clone());
-        assert!(driver.add_response(pk0, &core0.current_round_data).is_ok());
+        assert!(driver.add_response(0, &core0.current_round_data).is_ok());
         assert!(driver.create_aggregate_response().is_none());
-        assert!(driver.add_response(pk1, &core1.current_round_data).is_ok());
+        assert!(driver.add_response(1, &core1.current_round_data).is_ok());
         assert!(driver.create_aggregate_response().is_none());
-        assert!(driver.add_response(pk2, &core2.current_round_data).is_ok());
+        assert!(driver.add_response(2, &core2.current_round_data).is_ok());
         let header_message = driver.create_aggregate_response().expect("Header message");
         assert!(
             header_message
@@ -289,9 +289,9 @@ mod tests {
         assert!(core1.update_state(&header_message).is_ok());
         assert!(core2.update_state(&header_message).is_ok());
 
-        assert!(driver.add_response(pk0, &core0.current_round_data).is_ok());
-        assert!(driver.add_response(pk1, &core1.current_round_data).is_ok());
-        assert!(driver.add_response(pk2, &core2.current_round_data).is_ok());
+        assert!(driver.add_response(0, &core0.current_round_data).is_ok());
+        assert!(driver.add_response(1, &core1.current_round_data).is_ok());
+        assert!(driver.add_response(2, &core2.current_round_data).is_ok());
         let cert_message = driver.create_aggregate_response().expect("Header message");
         assert!(
             cert_message.check_request_valid(&votes).expect("No error")
@@ -307,7 +307,7 @@ mod tests {
         assert!(core3.current_round_data.round == 1);
 
         // Now add the response from 1
-        assert!(driver.add_response(pk0, &core3.current_round_data).is_ok());
+        assert!(driver.add_response(0, &core3.current_round_data).is_ok());
         assert!(driver.latest_states.len() == 1);
 
         // Check we do not have enough data to drive the next round yet.
@@ -334,7 +334,7 @@ mod tests {
 
         for i in 0..keys_vec.len() {
             let core = SealCoreState::init(
-                keys_vec[i].0,
+                i as u16,
                 keys_vec[i].1,
                 votes.clone(),
                 instance,
@@ -356,7 +356,7 @@ mod tests {
             println!("Full: {} Compress: {}", naive_enc.len(), compress_enc.len());
 
             driver
-                .add_response(keys_vec[i].0, &states_vec[i].current_round_data)
+                .add_response(i as u16, &states_vec[i].current_round_data)
                 .unwrap();
 
             // Lets see if we get the full round data:
@@ -407,7 +407,7 @@ mod tests {
 
         for i in 0..keys_vec.len() {
             let core = SealCoreState::init(
-                keys_vec[i].0,
+                i as u16,
                 keys_vec[i].1,
                 votes.clone(),
                 instance,
@@ -424,7 +424,7 @@ mod tests {
             let i = r % (keys_vec.len() - 1);
 
             driver
-                .add_response(keys_vec[i].0, &states_vec[i].current_round_data)
+                .add_response(i as u16, &states_vec[i].current_round_data)
                 .unwrap();
             if let Some(cert_message) = driver.create_aggregate_response() {
                 states_vec[i].update_state(&cert_message).unwrap();
@@ -459,7 +459,7 @@ mod tests {
 
         for i in 0..keys_vec.len() {
             let core = SealCoreState::init(
-                keys_vec[i].0,
+                i as u16,
                 keys_vec[i].1,
                 votes.clone(),
                 instance,
@@ -476,7 +476,7 @@ mod tests {
             let i = r % keys_vec.len();
 
             driver
-                .add_response(keys_vec[i].0, &states_vec[i].current_round_data)
+                .add_response(i as u16, &states_vec[i].current_round_data)
                 .unwrap();
 
             if let Some(cert_message) = driver.create_aggregate_response() {

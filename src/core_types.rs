@@ -49,7 +49,7 @@ impl BlockMetadata {
         hasher.update("META");
         hasher.update(self.instance);
         hasher.update(self.round.to_le_bytes());
-        hasher.update(self.creator);
+        hasher.update(self.creator.to_le_bytes());
         hasher.update(self.timestamp.to_le_bytes());
 
         let mut result = [0; DIGEST_SIZE];
@@ -183,10 +183,11 @@ impl PartialCertificate {
     }
 
     /// Checks that all certificate signatures as valid.
-    pub fn all_signatures_valid(&self) -> Fallible<()> {
+    pub fn all_signatures_valid(&self, committee: &VotingPower) -> Fallible<()> {
         let cert_digest = self.digest();
         for (addr, sign) in &self.signatures {
-            let public_key: PublicKey = PublicKey::from_bytes(&addr[..])?;
+        
+            let public_key: PublicKey = PublicKey::from_bytes(committee.get_key(&addr))?;
             let signature: Signature = Signature::try_from(&sign.bytes[..])?;
             ensure!(public_key.verify(&cert_digest[..], &signature).is_ok())
         }
@@ -249,7 +250,7 @@ mod tests {
         let md1 = BlockMetadata {
             instance: [0; 16],
             round: 99,
-            creator: [9; 32],
+            creator: 9,
             timestamp: 100,
         };
 
@@ -274,7 +275,7 @@ mod tests {
 
         // mess with creator
         let mut md2 = md1.clone();
-        md2.creator = [8; 32];
+        md2.creator = 8;
         let digest_bad = md2.digest();
         assert!(digest1 != digest_bad);
 
@@ -289,10 +290,14 @@ mod tests {
     fn make_block_header_and_sign_verify() -> Fallible<()> {
         let (pk, sk) = gen_keypair();
 
+        let votes: VotingPower = vec![(pk, 4)]
+            .into_iter()
+            .collect();
+
         let block_metadata = BlockMetadata {
             instance: [0; 16],
             round: 99,
-            creator: pk.clone(),
+            creator: 0,
             timestamp: 100,
         };
 
@@ -307,23 +312,23 @@ mod tests {
         let mut cert = bh.creator_sign_header(&sk)?;
 
         // Check the signature work
-        cert.all_signatures_valid()?;
+        cert.all_signatures_valid(&votes)?;
 
         // Modify something
         cert.block_header_digest.0[0] = 1;
-        assert!(cert.all_signatures_valid().is_err());
+        assert!(cert.all_signatures_valid(&votes).is_err());
 
         // Add more signatures
         let mut cert = bh.creator_sign_header(&sk)?;
         let (pk2, sk2) = gen_keypair();
-        cert.add_own_signature(&pk2, &sk2)?;
+        cert.add_own_signature(&0, &sk2)?;
 
         // Check the signature work
-        cert.all_signatures_valid()?;
+        cert.all_signatures_valid(&votes)?;
 
         // Modify something
         cert.block_header_digest.0[0] = 1;
-        assert!(cert.all_signatures_valid().is_err());
+        assert!(cert.all_signatures_valid(&votes).is_err());
 
         Ok(())
     }

@@ -18,7 +18,9 @@ use crate::BigArray;
 
 pub const DIGEST_SIZE: usize = 32;
 
-pub type Address = [u8; PUBLIC_KEY_LENGTH];
+
+pub type Address = u16;
+pub type PublicKey = [u8; PUBLIC_KEY_LENGTH];
 
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct BlockData {
@@ -63,11 +65,11 @@ impl SignatureBytes {
     }
 }
 
-pub fn gen_keypair() -> (Address, SigningSecretKey) {
+pub fn gen_keypair() -> (PublicKey, SigningSecretKey) {
     let mut csprng = OsRng {};
     let keypair: Keypair = Keypair::generate(&mut csprng);
 
-    let public_key_bytes: Address = keypair.public.to_bytes();
+    let public_key_bytes: PublicKey = keypair.public.to_bytes();
     let secret_key_bytes: SigningSecretKey = keypair.to_bytes();
 
     (public_key_bytes, secret_key_bytes)
@@ -77,11 +79,16 @@ pub fn gen_keypair() -> (Address, SigningSecretKey) {
 pub struct VotingPower {
     total_votes: u64,
     votes: HashMap<Address, u64>,
+    public_keys : HashMap<Address, PublicKey>,
 }
 
 impl VotingPower {
     pub fn get_votes(&self, a: &Address) -> Option<u64> {
         return self.votes.get(a).cloned();
+    }
+
+    pub fn get_key(&self, addr: &Address) -> &PublicKey {
+        return &self.public_keys[&addr];
     }
 
     /// The amount of stake to ensure that any two sets with that amount
@@ -100,12 +107,12 @@ impl VotingPower {
 
     /// Checks if an iterator of the form (Addr, _) represents
     /// votes forming a quorum
-    pub fn sum_stake<'a, X, I>(&self, vals: I) -> u64
+    pub fn sum_stake<'a, X, I>(&self, values: I) -> u64
     where
         I: Iterator<Item = (&'a Address, X)>,
     {
         let mut votes = 0;
-        for (addr, _) in vals {
+        for (addr, _) in values {
             if !self.votes.contains_key(addr) {
                 continue;
             }
@@ -117,39 +124,37 @@ impl VotingPower {
 
     /// Checks if an iterator of the form (Addr, _) represents
     /// votes forming a quorum
-    pub fn has_quorum<'a, X, I>(&self, vals: I) -> bool
+    pub fn has_quorum<'a, X, I>(&self, values: I) -> bool
     where
         I: Iterator<Item = (&'a Address, X)>,
     {
-        self.sum_stake(vals) >= self.quorum_size()
+        self.sum_stake(values) >= self.quorum_size()
     }
 
     /// Checks if an iterator of the form (Addr, _) represents
     /// votes containing at least one honest node.
-    pub fn has_one_honest<'a, X, I>(&self, vals: I) -> bool
+    pub fn has_one_honest<'a, X, I>(&self, values: I) -> bool
     where
         I: Iterator<Item = (&'a Address, X)>,
     {
-        self.sum_stake(vals) >= self.one_honest_size()
+        self.sum_stake(values) >= self.one_honest_size()
     }
 }
 
-impl FromIterator<(Address, u64)> for VotingPower {
-    fn from_iter<I: IntoIterator<Item = (Address, u64)>>(iter: I) -> Self {
+impl FromIterator<(PublicKey, u64)> for VotingPower {
+    fn from_iter<I: IntoIterator<Item = (PublicKey, u64)>>(iter: I) -> Self {
         let mut votes = HashMap::new();
+        let mut public_keys = HashMap::new();
         let mut total_votes = 0;
 
-        for (addr, vote) in iter {
-            if votes.contains_key(&addr) {
-                // Skip duplicate keys
-                continue;
-            }
-
-            votes.insert(addr, vote);
+        for (public_key, vote) in iter {
+            let new_index = votes.len() as u16;
+            votes.insert(new_index, vote);
+            public_keys.insert(new_index, public_key);
             total_votes += vote;
         }
 
-        VotingPower { total_votes, votes }
+        VotingPower { total_votes, votes, public_keys }
     }
 }
 
@@ -163,7 +168,7 @@ impl RoundPseudoRandom {
         hasher.update("SEED");
         hasher.update(instance);
         for (address, voting_power) in &committee.votes {
-            hasher.update(address);
+            hasher.update(address.to_le_bytes());
             hasher.update(voting_power.to_le_bytes());
         }
 
@@ -215,12 +220,12 @@ mod tests {
         assert!(votes.quorum_size() == 3);
         assert!(votes.one_honest_size() == 2);
 
-        let hm: HashMap<Address, _> = vec![([0; 32], 'a'), ([1; 32], 'b'), ([2; 32], 'c')]
+        let hm: HashMap<Address, _> = vec![(0, 'a'), (1, 'b'), (2, 'c')]
             .into_iter()
             .collect();
         assert!(votes.has_quorum(hm.iter()));
 
-        let hm: HashMap<Address, _> = vec![([2; 32], 'b'), ([3; 32], 'c')].into_iter().collect();
+        let hm: HashMap<Address, _> = vec![(2, 'b'), (3, 'c')].into_iter().collect();
         assert!(!votes.has_quorum(hm.iter()));
     }
 }

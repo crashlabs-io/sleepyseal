@@ -114,13 +114,13 @@ impl DriverRequest {
     }
 
     /// Checks all the certificates and partial certificate signatures.
-    pub fn all_signatures_valid(&self) -> Fallible<()> {
+    pub fn all_signatures_valid(&self, votes: &VotingPower) -> Fallible<()> {
         for (_addr, cert) in &self.previous_block_certificates {
-            ensure!(cert.0.all_signatures_valid().is_ok())
+            ensure!(cert.0.all_signatures_valid(&votes).is_ok())
         }
 
         for (_addr, cert) in &self.block_certificates {
-            ensure!(cert.all_signatures_valid().is_ok())
+            ensure!(cert.all_signatures_valid(&votes).is_ok())
         }
 
         Ok(())
@@ -376,7 +376,7 @@ mod tests {
         assert!(empty.check_request_valid(&votes).is_err());
 
         let data = BlockData::from(vec![0; 16]);
-        let md0 = BlockMetadata::new(instance, round, pk0, 101);
+        let md0 = BlockMetadata::new(instance, round, 0, 101);
         let bh0 = BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());
         let cert0 = bh0.creator_sign_header(&sk0).expect("No errors");
 
@@ -386,7 +386,7 @@ mod tests {
         assert!(empty.check_basic_valid(&votes).is_ok()); // Basic checks ok
         assert!(empty.check_request_valid(&votes).is_err()); // Request checks not ok
 
-        let md0 = BlockMetadata::new(instance, round, pk1, 101);
+        let md0 = BlockMetadata::new(instance, round, 1, 101);
         let bh0 = BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());
         let cert0 = bh0.creator_sign_header(&sk1).expect("No errors");
 
@@ -395,7 +395,7 @@ mod tests {
             .expect("No errors");
         assert!(empty.check_request_valid(&votes).is_err());
 
-        let md0 = BlockMetadata::new(instance, round, pk2, 101);
+        let md0 = BlockMetadata::new(instance, round, 2, 101);
         let bh0 = BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());
         let cert0 = bh0.creator_sign_header(&sk2).expect("No errors");
 
@@ -406,31 +406,31 @@ mod tests {
 
         assert!(empty.check_request_valid(&votes).unwrap() == RequestValidState::HeaderQuorum(0));
 
-        empty.sign_all_headers(&pk0, &sk0).unwrap();
+        empty.sign_all_headers(&0, &sk0).unwrap();
         assert!(empty.check_request_valid(&votes).is_err());
 
-        empty.sign_all_headers(&pk1, &sk1).unwrap();
+        empty.sign_all_headers(&1, &sk1).unwrap();
         assert!(empty.check_request_valid(&votes).is_err());
 
-        empty.sign_all_headers(&pk2, &sk2).unwrap();
+        empty.sign_all_headers(&2, &sk2).unwrap();
         assert!(empty.check_request_valid(&votes).unwrap() == RequestValidState::CertQuorum(0));
 
-        empty.sign_all_headers(&pk3, &sk3).unwrap();
+        empty.sign_all_headers(&3, &sk3).unwrap();
         assert!(empty.check_request_valid(&votes).unwrap() == RequestValidState::CertQuorum(0));
 
-        empty.block_data.remove(&pk0);
+        empty.block_data.remove(&0);
         assert!(empty.check_request_valid(&votes).is_err());
-        empty.block_headers.remove(&pk0);
-        assert!(empty.check_request_valid(&votes).is_err());
-
-        empty.block_data.remove(&pk1);
-        assert!(empty.check_request_valid(&votes).is_err());
-        empty.block_headers.remove(&pk1);
+        empty.block_headers.remove(&0);
         assert!(empty.check_request_valid(&votes).is_err());
 
-        empty.block_data.remove(&pk2);
+        empty.block_data.remove(&1);
         assert!(empty.check_request_valid(&votes).is_err());
-        empty.block_headers.remove(&pk2);
+        empty.block_headers.remove(&1);
+        assert!(empty.check_request_valid(&votes).is_err());
+
+        empty.block_data.remove(&2);
+        assert!(empty.check_request_valid(&votes).is_err());
+        empty.block_headers.remove(&2);
         assert!(empty.check_request_valid(&votes).is_ok());
     }
 
@@ -452,21 +452,22 @@ mod tests {
         assert!(empty.check_request_valid(&votes).is_err());
         let data = BlockData::from([0; 16].to_vec());
 
-        for (pkx, skx) in [(&pk0, &sk0), (&pk1, &sk1), (&pk2, &sk2), (&pk3, &sk3)] {
-            let md0 = BlockMetadata::new(instance, round, *pkx, 101);
+        for (i, (pkx, skx)) in [(&pk0, &sk0), (&pk1, &sk1), (&pk2, &sk2), (&pk3, &sk3)].iter().enumerate() {
+            let j : u16 = i as u16;
+            let md0 = BlockMetadata::new(instance, round, j, 101);
             let bh0 = BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());
             let cert0 = bh0.creator_sign_header(skx).expect("No errors");
 
-            empty.block_data.insert(*pkx, data.clone());
-            empty.block_headers.insert(*pkx, bh0);
-            empty.block_certificates.insert(*pkx, cert0);
+            empty.block_data.insert(j, data.clone());
+            empty.block_headers.insert(j, bh0);
+            empty.block_certificates.insert(j, cert0);
         }
 
         assert!(empty.check_request_valid(&votes).unwrap() == RequestValidState::HeaderQuorum(0));
 
-        empty.sign_all_headers(&pk0, &sk0).unwrap();
-        empty.sign_all_headers(&pk1, &sk1).unwrap();
-        empty.sign_all_headers(&pk2, &sk2).unwrap();
+        empty.sign_all_headers(&0, &sk0).unwrap();
+        empty.sign_all_headers(&1, &sk1).unwrap();
+        empty.sign_all_headers(&2, &sk2).unwrap();
         assert!(empty.check_request_valid(&votes).unwrap() == RequestValidState::CertQuorum(0));
 
         let round_zero_certs = empty.extract_full_certs(&votes);
@@ -478,14 +479,15 @@ mod tests {
         let mut empty = DriverRequest::empty(instance, round);
         assert!(empty.check_request_valid(&votes).is_err());
 
-        for (pkx, skx) in [(&pk0, &sk0), (&pk1, &sk1), (&pk2, &sk2), (&pk3, &sk3)] {
-            let md0 = BlockMetadata::new(instance, round, *pkx, 101);
+        for (i, (pkx, skx)) in [(&pk0, &sk0), (&pk1, &sk1), (&pk2, &sk2), (&pk3, &sk3)].iter().enumerate() {
+            let j : u16 = i as u16;
+            let md0 = BlockMetadata::new(instance, round, j, 101);
             let bh0 = BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());
             let cert0 = bh0.creator_sign_header(skx).expect("No errors");
 
-            empty.block_data.insert(*pkx, data.clone());
-            empty.block_headers.insert(*pkx, bh0);
-            empty.block_certificates.insert(*pkx, cert0);
+            empty.block_data.insert(j, data.clone());
+            empty.block_headers.insert(j, bh0);
+            empty.block_certificates.insert(j, cert0);
         }
 
         assert!(empty.check_request_valid(&votes).is_err());
@@ -497,8 +499,9 @@ mod tests {
         let mut empty = DriverRequest::empty(instance, round);
         assert!(empty.check_request_valid(&votes).is_err());
 
-        for (pkx, skx) in [(&pk0, &sk0), (&pk1, &sk1), (&pk2, &sk2), (&pk3, &sk3)] {
-            let md0 = BlockMetadata::new(instance, round, *pkx, 101);
+        for (i, (pkx, skx)) in [(&pk0, &sk0), (&pk1, &sk1), (&pk2, &sk2), (&pk3, &sk3)].iter().enumerate() {
+            let j : u16 = i as u16;
+            let md0 = BlockMetadata::new(instance, round, j, 101);
             let mut bh0 =
                 BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());
             bh0.block_certificates = round_zero_certs
@@ -507,9 +510,9 @@ mod tests {
                 .collect();
             let cert0 = bh0.creator_sign_header(skx).expect("No errors");
 
-            empty.block_data.insert(*pkx, data.clone());
-            empty.block_headers.insert(*pkx, bh0);
-            empty.block_certificates.insert(*pkx, cert0);
+            empty.block_data.insert(j, data.clone());
+            empty.block_headers.insert(j, bh0);
+            empty.block_certificates.insert(j, cert0);
             empty
                 .previous_block_certificates
                 .extend(round_zero_certs.clone());

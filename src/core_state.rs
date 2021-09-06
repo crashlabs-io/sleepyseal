@@ -255,7 +255,7 @@ mod tests {
 
         let instance = [0; 16];
         let mut core0 = SealCoreState::init(
-            pk0,
+            0,
             sk0,
             votes.clone(),
             instance,
@@ -263,21 +263,21 @@ mod tests {
         );
         assert!(core0.current_round_data.check_basic_valid(&votes).is_ok());
         let core1 = SealCoreState::init(
-            pk1,
+            1,
             sk1,
             votes.clone(),
             instance,
             BlockData::from(b"ABC1".to_vec()),
         );
         let core2 = SealCoreState::init(
-            pk2,
+            2,
             sk2,
             votes.clone(),
             instance,
             BlockData::from(b"ABC2".to_vec()),
         );
         let core3 = SealCoreState::init(
-            pk3,
+            3,
             sk3,
             votes.clone(),
             instance,
@@ -286,16 +286,16 @@ mod tests {
 
         let mut client0 = DriverRequest::empty(instance, 0);
         client0
-            .merge_block_from(&core0.current_round_data, &pk0)
+            .merge_block_from(&core0.current_round_data, &0)
             .expect("No problem merging");
         client0
-            .merge_block_from(&core1.current_round_data, &pk1)
+            .merge_block_from(&core1.current_round_data, &1)
             .expect("No problem merging");
         client0
-            .merge_block_from(&core2.current_round_data, &pk2)
+            .merge_block_from(&core2.current_round_data, &2)
             .expect("No problem merging");
         client0
-            .merge_block_from(&core3.current_round_data, &pk3)
+            .merge_block_from(&core3.current_round_data, &3)
             .expect("No problem merging");
         assert!(client0.check_request_valid(&votes).is_ok());
 
