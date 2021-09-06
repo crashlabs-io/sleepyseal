@@ -45,8 +45,9 @@ pub type BlockDataDigest = [u8; DIGEST_SIZE];
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub struct BlockHeaderDigest(
-    // #[serde(with = "BigArray")] 
-    pub [u8; DIGEST_SIZE]);
+    // #[serde(with = "BigArray")]
+    pub [u8; DIGEST_SIZE],
+);
 
 pub type SigningSecretKey = [u8; KEYPAIR_LENGTH];
 

@@ -14,8 +14,6 @@ use failure::{bail, ensure, Fallible};
 
 use crate::base_types::*;
 
-use crate::BigArray;
-
 /// A structure that holds block meta-data.
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct BlockMetadata {

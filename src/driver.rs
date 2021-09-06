@@ -448,7 +448,7 @@ mod tests {
         let mut states_vec = Vec::new();
 
         let f = 6;
-        for _ in 0..(3*f + 1) {
+        for _ in 0..(3 * f + 1) {
             let (pk, sk) = gen_keypair();
             keys_vec.push((pk, sk))
         }
@@ -480,7 +480,6 @@ mod tests {
                 .unwrap();
 
             if let Some(cert_message) = driver.create_aggregate_response() {
-
                 // Measure size
                 let naive_enc = &cert_message.naive_encode();
                 let compress_enc = &cert_message.compressed_encode();
@@ -499,10 +498,12 @@ mod tests {
                 }
                 let no_cert = req_minus_sigs.compressed_encode();
 
-
                 println!("Full: {} Compress: {}", naive_enc.len(), compress_enc.len());
-                println!("No sigs compress: {} No certs compress: {}", no_sig_enc.len(), no_cert.len());
-
+                println!(
+                    "No sigs compress: {} No certs compress: {}",
+                    no_sig_enc.len(),
+                    no_cert.len()
+                );
 
                 // Update state
                 states_vec[i].update_state(&cert_message).unwrap();

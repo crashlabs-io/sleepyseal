@@ -129,20 +129,18 @@ impl DriverRequest {
     /// Perform only basic validity checks. This is the bar for a client to consider a state
     /// valid from a node.
     pub fn check_basic_valid(&self, committee: &VotingPower) -> Fallible<()> {
-
         // First check all certificates from the previous round.
         if self.round > 0 {
             for (addr, cert) in &self.previous_block_certificates {
                 ensure!(cert.0.block_metadata.instance == self.instance);
                 ensure!(cert.0.block_metadata.creator == *addr);
                 ensure!(cert.0.block_metadata.round == self.round - 1);
-    
+
                 // Must contain the creator signature and a quorum overall.
                 ensure!(cert.0.signatures.contains_key(addr));
                 ensure!(committee.has_quorum(cert.0.signatures.iter()));
-            }    
-        }
-        else {
+            }
+        } else {
             ensure!(self.previous_block_certificates.len() == 0);
         }
 
