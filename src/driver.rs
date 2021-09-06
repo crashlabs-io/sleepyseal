@@ -228,13 +228,14 @@ mod tests {
 
     use super::*;
     use crate::core_state::*;
+    use crate::crypto::{ key_gen, };
 
     #[test]
     fn sim_four_authorities_client() {
-        let (pk0, sk0) = gen_keypair();
-        let (pk1, sk1) = gen_keypair();
-        let (pk2, sk2) = gen_keypair();
-        let (pk3, sk3) = gen_keypair();
+        let (pk0, sk0) = key_gen();
+        let (pk1, sk1) = key_gen();
+        let (pk2, sk2) = key_gen();
+        let (pk3, sk3) = key_gen();
 
         let votes: VotingPower = vec![(pk0, 1), (pk1, 1), (pk2, 1), (pk3, 1)]
             .into_iter()
@@ -324,7 +325,7 @@ mod tests {
         let mut states_vec = Vec::new();
 
         for _ in 0..4 {
-            let (pk, sk) = gen_keypair();
+            let (pk, sk) = key_gen();
             keys_vec.push((pk, sk))
         }
 
@@ -397,7 +398,7 @@ mod tests {
         let mut states_vec = Vec::new();
 
         for _ in 0..4 {
-            let (pk, sk) = gen_keypair();
+            let (pk, sk) = key_gen();
             keys_vec.push((pk, sk))
         }
 
@@ -449,7 +450,7 @@ mod tests {
 
         let f = 6;
         for _ in 0..(3 * f + 1) {
-            let (pk, sk) = gen_keypair();
+            let (pk, sk) = key_gen();
             keys_vec.push((pk, sk))
         }
 

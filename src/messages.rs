@@ -357,13 +357,14 @@ mod tests {
 
     use super::*;
     use std::borrow::Borrow;
+    use crate::crypto::{ key_gen, };
 
     #[test]
     fn make_message_zero_round() {
-        let (pk0, sk0) = gen_keypair();
-        let (pk1, sk1) = gen_keypair();
-        let (pk2, sk2) = gen_keypair();
-        let (pk3, sk3) = gen_keypair();
+        let (pk0, sk0) = key_gen();
+        let (pk1, sk1) = key_gen();
+        let (pk2, sk2) = key_gen();
+        let (pk3, sk3) = key_gen();
 
         let votes: VotingPower = vec![(pk0, 1), (pk1, 1), (pk2, 1), (pk3, 1)]
             .into_iter()
@@ -436,10 +437,10 @@ mod tests {
 
     #[test]
     fn make_message_one_round() {
-        let (pk0, sk0) = gen_keypair();
-        let (pk1, sk1) = gen_keypair();
-        let (pk2, sk2) = gen_keypair();
-        let (pk3, sk3) = gen_keypair();
+        let (pk0, sk0) = key_gen();
+        let (pk1, sk1) = key_gen();
+        let (pk2, sk2) = key_gen();
+        let (pk3, sk3) = key_gen();
 
         let votes: VotingPower = vec![(pk0, 1), (pk1, 1), (pk2, 1), (pk3, 1)]
             .into_iter()
@@ -532,7 +533,13 @@ mod tests {
 
     #[test]
     fn make_message_full() {
-        let votes: VotingPower = vec![([0; 32], 1), ([1; 32], 1), ([2; 32], 1), ([3; 32], 1)]
+
+        let (pk0, _sk0) = key_gen();
+        let (pk1, _sk1) = key_gen();
+        let (pk2, _sk2) = key_gen();
+        let (pk3, _sk3) = key_gen();
+
+        let votes: VotingPower = vec![(pk0, 1), (pk1, 1), (pk2, 1), (pk3, 1)]
             .into_iter()
             .collect();
         assert!(votes.quorum_size() == 3);

@@ -1,16 +1,14 @@
 //! Defines the consensus data structures to build a shared DAG.
 
 use std::collections::BTreeMap;
-use std::convert::TryFrom;
 use std::convert::TryInto;
 
-use ed25519_dalek::Digest;
-use ed25519_dalek::Verifier;
-use ed25519_dalek::{Keypair, PublicKey, Sha512};
-use ed25519_dalek::{Signature, Signer};
+use sha2::{Sha512, Digest};
 use serde::{Deserialize, Serialize};
 
 use failure::{bail, ensure, Fallible};
+
+use crate::crypto::{PublicKey, sign, verify};
 
 use crate::base_types::*;
 
@@ -126,12 +124,12 @@ impl BlockHeader {
 
         let cert_digest = cert.digest();
 
-        let keypair: Keypair = Keypair::from_bytes(_secret)?;
-        let signature: Signature = keypair.sign(&cert_digest[..]);
+        let mut sig = [0; 48];
+        sign(&_secret, &cert_digest, &mut sig);
 
         cert.signatures.insert(
             self.block_metadata.creator,
-            SignatureBytes::new(signature.to_bytes()),
+            SignatureBytes::new(sig),
         );
 
         Ok(cert)
@@ -172,11 +170,12 @@ impl PartialCertificate {
         _secret: &SigningSecretKey,
     ) -> Fallible<()> {
         if !self.signatures.contains_key(signer) {
-            let key_pair: Keypair = Keypair::from_bytes(_secret)?;
-            let signature: Signature = key_pair.sign(&self.digest());
+
+            let mut sig = [0; 48];
+            sign(&_secret, &self.digest(), &mut sig);
 
             self.signatures
-                .insert(signer.clone(), SignatureBytes::new(signature.to_bytes()));
+                .insert(signer.clone(), SignatureBytes::new(sig));
         }
 
         Ok(())
@@ -186,9 +185,10 @@ impl PartialCertificate {
     pub fn all_signatures_valid(&self, committee: &VotingPower) -> Fallible<()> {
         let cert_digest = self.digest();
         for (addr, sign) in &self.signatures {
-            let public_key: PublicKey = PublicKey::from_bytes(committee.get_key(&addr))?;
-            let signature: Signature = Signature::try_from(&sign.bytes[..])?;
-            ensure!(public_key.verify(&cert_digest[..], &signature).is_ok())
+
+            let public_key: &PublicKey = committee.get_key(&addr);
+            ensure!(verify(&public_key, &cert_digest[..], &sign.bytes));
+
         }
         Ok(())
     }
@@ -243,6 +243,7 @@ pub struct BlockCertificate(pub PartialCertificate);
 mod tests {
 
     use super::*;
+    use crate::crypto::{ key_gen, };
 
     #[test]
     fn make_and_hash_metadata() {
@@ -287,7 +288,7 @@ mod tests {
 
     #[test]
     fn make_block_header_and_sign_verify() -> Fallible<()> {
-        let (pk, sk) = gen_keypair();
+        let (pk, sk) = key_gen();
 
         let votes: VotingPower = vec![(pk, 4)].into_iter().collect();
 
@@ -317,7 +318,7 @@ mod tests {
 
         // Add more signatures
         let mut cert = bh.creator_sign_header(&sk)?;
-        let (_, sk2) = gen_keypair();
+        let (_, sk2) = key_gen();
         cert.add_own_signature(&0, &sk2)?;
 
         // Check the signature work

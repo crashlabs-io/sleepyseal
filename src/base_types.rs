@@ -5,21 +5,16 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::iter::FromIterator;
 
-use rand::rngs::OsRng;
-
-use ed25519_dalek::Digest;
-use ed25519_dalek::Keypair;
-use ed25519_dalek::Sha512;
-use ed25519_dalek::{KEYPAIR_LENGTH, PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH};
+use sha2::{Sha512, Digest};
 
 use serde::{Deserialize, Serialize};
 
 use crate::BigArray;
+use crate::crypto::{PublicKey, SecretKey, Signature, };
 
 pub const DIGEST_SIZE: usize = 32;
 
 pub type Address = u16;
-pub type PublicKey = [u8; PUBLIC_KEY_LENGTH];
 
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct BlockData {
@@ -50,28 +45,18 @@ pub struct BlockHeaderDigest(
     pub [u8; DIGEST_SIZE],
 );
 
-pub type SigningSecretKey = [u8; KEYPAIR_LENGTH];
+pub type SigningSecretKey = SecretKey;
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct SignatureBytes {
     #[serde(with = "BigArray")]
-    pub bytes: [u8; SIGNATURE_LENGTH],
+    pub bytes: Signature,
 }
 
 impl SignatureBytes {
-    pub fn new(bytes: [u8; SIGNATURE_LENGTH]) -> SignatureBytes {
+    pub fn new(bytes: [u8; 48]) -> SignatureBytes {
         SignatureBytes { bytes }
     }
-}
-
-pub fn gen_keypair() -> (PublicKey, SigningSecretKey) {
-    let mut csprng = OsRng {};
-    let keypair: Keypair = Keypair::generate(&mut csprng);
-
-    let public_key_bytes: PublicKey = keypair.public.to_bytes();
-    let secret_key_bytes: SigningSecretKey = keypair.to_bytes();
-
-    (public_key_bytes, secret_key_bytes)
 }
 
 #[derive(Clone)]
@@ -206,10 +191,17 @@ impl RoundPseudoRandom {
 mod tests {
 
     use super::*;
+    use crate::crypto::{ key_gen, };
 
     #[test]
     fn voting_power() {
-        let votes: VotingPower = vec![([0; 32], 1), ([1; 32], 1), ([2; 32], 1), ([3; 32], 1)]
+
+        let (pk0,_) = key_gen();
+        let (pk1,_) = key_gen();
+        let (pk2,_) = key_gen();
+        let (pk3,_) = key_gen();
+
+        let votes: VotingPower = vec![(pk0, 1), (pk1, 1), (pk2, 1), (pk3, 1)]
             .into_iter()
             .collect();
         assert!(votes.quorum_size() == 3);
@@ -217,7 +209,13 @@ mod tests {
 
     #[test]
     fn voting_quorum() {
-        let votes: VotingPower = vec![([0; 32], 1), ([1; 32], 1), ([2; 32], 1), ([3; 32], 1)]
+
+        let (pk0,_) = key_gen();
+        let (pk1,_) = key_gen();
+        let (pk2,_) = key_gen();
+        let (pk3,_) = key_gen();
+
+        let votes: VotingPower = vec![(pk0, 1), (pk1, 1), (pk2, 1), (pk3, 1)]
             .into_iter()
             .collect();
         assert!(votes.quorum_size() == 3);

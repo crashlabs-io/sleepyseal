@@ -241,13 +241,14 @@ impl SealCoreState {
 mod tests {
 
     use super::*;
+    use crate::crypto::{ key_gen, };
 
     #[test]
     fn sim_four_authorities() {
-        let (pk0, sk0) = gen_keypair();
-        let (pk1, sk1) = gen_keypair();
-        let (pk2, sk2) = gen_keypair();
-        let (pk3, sk3) = gen_keypair();
+        let (pk0, sk0) = key_gen();
+        let (pk1, sk1) = key_gen();
+        let (pk2, sk2) = key_gen();
+        let (pk3, sk3) = key_gen();
 
         let votes: VotingPower = vec![(pk0, 1), (pk1, 1), (pk2, 1), (pk3, 1)]
             .into_iter()
