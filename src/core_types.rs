@@ -186,7 +186,6 @@ impl PartialCertificate {
     pub fn all_signatures_valid(&self, committee: &VotingPower) -> Fallible<()> {
         let cert_digest = self.digest();
         for (addr, sign) in &self.signatures {
-        
             let public_key: PublicKey = PublicKey::from_bytes(committee.get_key(&addr))?;
             let signature: Signature = Signature::try_from(&sign.bytes[..])?;
             ensure!(public_key.verify(&cert_digest[..], &signature).is_ok())
@@ -290,9 +289,7 @@ mod tests {
     fn make_block_header_and_sign_verify() -> Fallible<()> {
         let (pk, sk) = gen_keypair();
 
-        let votes: VotingPower = vec![(pk, 4)]
-            .into_iter()
-            .collect();
+        let votes: VotingPower = vec![(pk, 4)].into_iter().collect();
 
         let block_metadata = BlockMetadata {
             instance: [0; 16],

@@ -452,8 +452,11 @@ mod tests {
         assert!(empty.check_request_valid(&votes).is_err());
         let data = BlockData::from([0; 16].to_vec());
 
-        for (i, (_, skx)) in [(&pk0, &sk0), (&pk1, &sk1), (&pk2, &sk2), (&pk3, &sk3)].iter().enumerate() {
-            let j : u16 = i as u16;
+        for (i, (_, skx)) in [(&pk0, &sk0), (&pk1, &sk1), (&pk2, &sk2), (&pk3, &sk3)]
+            .iter()
+            .enumerate()
+        {
+            let j: u16 = i as u16;
             let md0 = BlockMetadata::new(instance, round, j, 101);
             let bh0 = BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());
             let cert0 = bh0.creator_sign_header(skx).expect("No errors");
@@ -479,8 +482,11 @@ mod tests {
         let mut empty = DriverRequest::empty(instance, round);
         assert!(empty.check_request_valid(&votes).is_err());
 
-        for (i, (_, skx)) in [(&pk0, &sk0), (&pk1, &sk1), (&pk2, &sk2), (&pk3, &sk3)].iter().enumerate() {
-            let j : u16 = i as u16;
+        for (i, (_, skx)) in [(&pk0, &sk0), (&pk1, &sk1), (&pk2, &sk2), (&pk3, &sk3)]
+            .iter()
+            .enumerate()
+        {
+            let j: u16 = i as u16;
             let md0 = BlockMetadata::new(instance, round, j, 101);
             let bh0 = BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());
             let cert0 = bh0.creator_sign_header(skx).expect("No errors");
@@ -499,8 +505,11 @@ mod tests {
         let mut empty = DriverRequest::empty(instance, round);
         assert!(empty.check_request_valid(&votes).is_err());
 
-        for (i, (_, skx)) in [(&pk0, &sk0), (&pk1, &sk1), (&pk2, &sk2), (&pk3, &sk3)].iter().enumerate() {
-            let j : u16 = i as u16;
+        for (i, (_, skx)) in [(&pk0, &sk0), (&pk1, &sk1), (&pk2, &sk2), (&pk3, &sk3)]
+            .iter()
+            .enumerate()
+        {
+            let j: u16 = i as u16;
             let md0 = BlockMetadata::new(instance, round, j, 101);
             let mut bh0 =
                 BlockHeader::empty(md0, digest_block_data(data.borrow()), data.data.len());

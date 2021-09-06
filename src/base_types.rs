@@ -18,7 +18,6 @@ use crate::BigArray;
 
 pub const DIGEST_SIZE: usize = 32;
 
-
 pub type Address = u16;
 pub type PublicKey = [u8; PUBLIC_KEY_LENGTH];
 
@@ -79,7 +78,7 @@ pub fn gen_keypair() -> (PublicKey, SigningSecretKey) {
 pub struct VotingPower {
     total_votes: u64,
     votes: HashMap<Address, u64>,
-    public_keys : HashMap<Address, PublicKey>,
+    public_keys: HashMap<Address, PublicKey>,
 }
 
 impl VotingPower {
@@ -154,7 +153,11 @@ impl FromIterator<(PublicKey, u64)> for VotingPower {
             total_votes += vote;
         }
 
-        VotingPower { total_votes, votes, public_keys }
+        VotingPower {
+            total_votes,
+            votes,
+            public_keys,
+        }
     }
 }
 
@@ -220,9 +223,7 @@ mod tests {
         assert!(votes.quorum_size() == 3);
         assert!(votes.one_honest_size() == 2);
 
-        let hm: HashMap<Address, _> = vec![(0, 'a'), (1, 'b'), (2, 'c')]
-            .into_iter()
-            .collect();
+        let hm: HashMap<Address, _> = vec![(0, 'a'), (1, 'b'), (2, 'c')].into_iter().collect();
         assert!(votes.has_quorum(hm.iter()));
 
         let hm: HashMap<Address, _> = vec![(2, 'b'), (3, 'c')].into_iter().collect();
