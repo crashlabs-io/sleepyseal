@@ -472,7 +472,7 @@ mod tests {
         // The client state
         let mut latest = 0;
         let mut driver = DriverCore::new(instance, votes.clone());
-        for r in 0..5000 {
+        for r in 0..200 {
             let i = r % keys_vec.len();
 
             driver
@@ -517,11 +517,11 @@ mod tests {
             );
             latest = states_vec[i].current_round_data.round;
 
-            if latest > 25 {
+            if latest > 2 {
                 break;
             }
         }
 
-        assert!(latest > 25);
+        assert!(latest > 2);
     }
 }
