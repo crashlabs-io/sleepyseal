@@ -447,7 +447,8 @@ mod tests {
         let mut keys_vec = Vec::new();
         let mut states_vec = Vec::new();
 
-        for _ in 0..100 {
+        let f = 6;
+        for _ in 0..(3*f + 1) {
             let (pk, sk) = gen_keypair();
             keys_vec.push((pk, sk))
         }
