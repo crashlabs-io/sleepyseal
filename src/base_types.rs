@@ -5,12 +5,12 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::iter::FromIterator;
 
-use sha2::{Sha512, Digest};
+use sha2::{Digest, Sha512};
 
 use serde::{Deserialize, Serialize};
 
+use crate::crypto::{PublicKey, SecretKey, Signature};
 use crate::BigArray;
-use crate::crypto::{PublicKey, SecretKey, Signature, };
 
 pub const DIGEST_SIZE: usize = 32;
 
@@ -73,6 +73,10 @@ impl VotingPower {
 
     pub fn get_key(&self, addr: &Address) -> &PublicKey {
         return &self.public_keys[&addr];
+    }
+
+    pub fn num_keys(&self) -> usize {
+        return self.public_keys.len();
     }
 
     /// The amount of stake to ensure that any two sets with that amount
@@ -191,15 +195,14 @@ impl RoundPseudoRandom {
 mod tests {
 
     use super::*;
-    use crate::crypto::{ key_gen, };
+    use crate::crypto::key_gen;
 
     #[test]
     fn voting_power() {
-
-        let (pk0,_) = key_gen();
-        let (pk1,_) = key_gen();
-        let (pk2,_) = key_gen();
-        let (pk3,_) = key_gen();
+        let (pk0, _) = key_gen();
+        let (pk1, _) = key_gen();
+        let (pk2, _) = key_gen();
+        let (pk3, _) = key_gen();
 
         let votes: VotingPower = vec![(pk0, 1), (pk1, 1), (pk2, 1), (pk3, 1)]
             .into_iter()
@@ -209,11 +212,10 @@ mod tests {
 
     #[test]
     fn voting_quorum() {
-
-        let (pk0,_) = key_gen();
-        let (pk1,_) = key_gen();
-        let (pk2,_) = key_gen();
-        let (pk3,_) = key_gen();
+        let (pk0, _) = key_gen();
+        let (pk1, _) = key_gen();
+        let (pk2, _) = key_gen();
+        let (pk3, _) = key_gen();
 
         let votes: VotingPower = vec![(pk0, 1), (pk1, 1), (pk2, 1), (pk3, 1)]
             .into_iter()

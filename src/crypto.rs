@@ -75,7 +75,7 @@ pub fn aggregate_signature(many_signatures: &[Signature]) -> Result<Signature, (
 }
 
 pub fn verify_aggregate_signature(
-    public_keys: &[PublicKey],
+    public_keys: &[&PublicKey],
     message: &[u8],
     signature: &Signature,
 ) -> bool {
@@ -191,17 +191,17 @@ mod tests {
         let aggregate_signature = aggregate_signature(&[sig_bytes0, sig_bytes1]).unwrap();
 
         assert!(verify_aggregate_signature(
-            &[public_key0, public_key1],
+            &[&public_key0, &public_key1],
             b"Hello",
             &aggregate_signature
         ));
         assert!(!verify_aggregate_signature(
-            &[public_key0, public_key1],
+            &[&public_key0, &public_key1],
             b"Hellx",
             &aggregate_signature
         ));
         assert!(!verify_aggregate_signature(
-            &[public_key0, public_key0],
+            &[&public_key0, &public_key0],
             b"Hello",
             &aggregate_signature
         ));

@@ -139,7 +139,7 @@ impl DriverRequest {
 
                 // Must contain the creator signature and a quorum overall.
                 ensure!(cert.0.signatures.contains_key(addr));
-                ensure!(committee.has_quorum(cert.0.signatures.iter()));
+                ensure!(cert.0.has_quorum(&committee));
             }
         } else {
             ensure!(self.previous_block_certificates.len() == 0);
@@ -224,7 +224,7 @@ impl DriverRequest {
         self.check_basic_valid(&committee)?;
 
         if self.block_headers.len() > 0 {
-            // If any blockheaders are included there must be a quorum of blockheaders
+            // If any block headers are included there must be a quorum of block headers
             ensure!(committee.has_quorum(self.block_headers.iter()));
             response = RequestValidState::HeaderQuorum(self.round);
         }
@@ -237,12 +237,12 @@ impl DriverRequest {
         let mut full_certs: Vec<(&Address, _)> = Vec::with_capacity(self.block_certificates.len());
         for (cert_addr, cert) in &self.block_certificates {
             // Either it is a partial cert with one signature, or it is a full cert
-            if cert.signatures.len() == 1 {
+            if cert.aggregate_signature.is_none() && cert.signatures.len() == 1 {
                 // Must match a header, and given header check logic it is good
                 ensure!(self.block_headers.contains_key(cert_addr));
             } else {
                 // Is a full certificate
-                ensure!(committee.has_quorum(cert.signatures.iter()));
+                ensure!(cert.has_quorum(&committee));
                 full_certs.push((cert_addr, ()));
             }
         }
@@ -269,7 +269,7 @@ impl DriverRequest {
             .block_certificates
             .clone()
             .into_iter()
-            .filter(|(_, c)| committee.has_quorum(c.signatures.iter()))
+            .filter(|(_, c)| c.has_quorum(&committee))
             .map(|(a, c)| (a, BlockCertificate(c)))
             .collect();
 
@@ -357,8 +357,8 @@ impl DriverRequest {
 mod tests {
 
     use super::*;
+    use crate::crypto::key_gen;
     use std::borrow::Borrow;
-    use crate::crypto::{ key_gen, };
 
     #[test]
     fn make_message_zero_round() {
@@ -534,7 +534,6 @@ mod tests {
 
     #[test]
     fn make_message_full() {
-
         let (pk0, _sk0) = key_gen();
         let (pk1, _sk1) = key_gen();
         let (pk2, _sk2) = key_gen();

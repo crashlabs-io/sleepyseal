@@ -177,7 +177,11 @@ impl SealCoreState {
                                 .block_certificates
                                 .get_mut(a)
                                 .unwrap()
-                                .add_own_signature(&self.committee, &self.my_address, &self.my_secret)?;
+                                .add_own_signature(
+                                    &self.committee,
+                                    &self.my_address,
+                                    &self.my_secret,
+                                )?;
                         }
                     }
                 }
@@ -241,7 +245,7 @@ impl SealCoreState {
 mod tests {
 
     use super::*;
-    use crate::crypto::{ key_gen, };
+    use crate::crypto::key_gen;
 
     #[test]
     fn sim_four_authorities() {

@@ -102,8 +102,14 @@ impl DriverCore {
         // Do we have a quorum of full certs?
         let full_certs: HashMap<Address, PartialCertificate> = aggregate_certs
             .iter()
-            .filter(|(_h, c)| self.committee.has_quorum(c.signatures.iter()))
-            .map(|(_h, c)| (c.block_metadata.creator, c.clone()))
+            .filter(|(_h, c)| c.has_quorum(&self.committee))
+            .map(|(_h, c)| {
+                (c.block_metadata.creator, {
+                    let mut cert = c.clone();
+                    cert.make_cert(&self.committee);
+                    cert
+                })
+            })
             .collect();
 
         // If we have a quorum of full certificates the request simply lists them
@@ -144,6 +150,11 @@ impl DriverCore {
 
         // Do we have a quorum of headers?
         if self.committee.has_quorum(empty.block_headers.iter()) {
+
+            for (addr, cert) in &mut empty.previous_block_certificates {
+                cert.0.make_cert(&self.committee);
+            }
+
             return Some(empty); // Return the quorum of headers to gather more signatures.
         }
 
@@ -228,7 +239,7 @@ mod tests {
 
     use super::*;
     use crate::core_state::*;
-    use crate::crypto::{ key_gen, };
+    use crate::crypto::key_gen;
 
     #[test]
     fn sim_four_authorities_client() {
@@ -303,7 +314,7 @@ mod tests {
         assert!(core3.update_state(&cert_message).is_ok());
         assert!(core3.current_round_data.round == 0);
 
-        // After we explicitely advance, now it is 1
+        // After we explicitly advance, now it is 1
         assert!(core3.advance_to_new_round(1).is_ok());
         assert!(core3.current_round_data.round == 1);
 
@@ -448,7 +459,7 @@ mod tests {
         let mut keys_vec = Vec::new();
         let mut states_vec = Vec::new();
 
-        let f = 6;
+        let f = 2;
         for _ in 0..(3 * f + 1) {
             let (pk, sk) = key_gen();
             keys_vec.push((pk, sk))

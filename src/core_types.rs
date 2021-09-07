@@ -3,14 +3,15 @@
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 
-use sha2::{Sha512, Digest};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha512};
 
 use failure::{bail, ensure, Fallible};
 
-use crate::crypto::{PublicKey, sign, verify};
+use crate::crypto::{aggregate_signature, sign, verify, verify_aggregate_signature, PublicKey};
 
 use crate::base_types::*;
+use bitvec::prelude::*;
 
 /// A structure that holds block meta-data.
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
@@ -120,6 +121,7 @@ impl BlockHeader {
             block_metadata: self.block_metadata.clone(),
             block_header_digest,
             signatures: BTreeMap::new(),
+            aggregate_signature: None,
         };
 
         let cert_digest = cert.digest();
@@ -127,10 +129,8 @@ impl BlockHeader {
         let mut sig = [0; 48];
         sign(&_secret, &cert_digest, &mut sig);
 
-        cert.signatures.insert(
-            self.block_metadata.creator,
-            SignatureBytes::new(sig),
-        );
+        cert.signatures
+            .insert(self.block_metadata.creator, SignatureBytes::new(sig));
 
         Ok(cert)
     }
@@ -139,9 +139,36 @@ impl BlockHeader {
 use bitvec::vec::BitVec;
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
-pub struct SignatureEvidence {
-    signers : BitVec,
-    aggregate_signature : SignatureBytes,
+pub struct AggregateSignature {
+    signers: BitVec,
+    signature: SignatureBytes,
+}
+
+use std::collections::HashMap;
+
+impl AggregateSignature {
+    pub fn has_quorum(&self, votes: &VotingPower) -> bool {
+        let signers: HashMap<_, _> = self
+            .signers
+            .iter()
+            .enumerate()
+            .filter(|(id, bit)| **bit)
+            .map(|(id, bit)| ((id as Address), 0usize))
+            .collect();
+        return votes.has_quorum(signers.iter());
+    }
+
+    pub fn verify(&self, votes: &VotingPower, message: &[u8]) -> bool {
+        let signers: Vec<&PublicKey> = self
+            .signers
+            .iter()
+            .enumerate()
+            .filter(|(id, bit)| **bit)
+            .map(|(id, bit)| votes.get_key(&(id as Address)))
+            .collect();
+
+        return verify_aggregate_signature(&signers[..], message, &self.signature.bytes);
+    }
 }
 
 /// A partial certificate containing one or more signatures for a block header.
@@ -153,7 +180,8 @@ pub struct PartialCertificate {
     pub block_header_digest: BlockHeaderDigest,
     /// The signatures supporting this certificate
     pub signatures: BTreeMap<Address, SignatureBytes>,
-    // pub signatures : Vec<SignatureEvidence>,
+    /// An aggregate signature from a quorum of nodes.
+    pub aggregate_signature: Option<AggregateSignature>,
 }
 
 impl PartialCertificate {
@@ -180,7 +208,6 @@ impl PartialCertificate {
         _secret: &SigningSecretKey,
     ) -> Fallible<()> {
         if !self.signatures.contains_key(signer) {
-
             let mut sig = [0; 48];
             sign(&_secret, &self.digest(), &mut sig);
 
@@ -194,12 +221,17 @@ impl PartialCertificate {
     /// Checks that all certificate signatures as valid.
     pub fn all_signatures_valid(&self, committee: &VotingPower) -> Fallible<()> {
         let cert_digest = self.digest();
+        // Check each signature.
         for (addr, sign) in &self.signatures {
-
             let public_key: &PublicKey = committee.get_key(&addr);
             ensure!(verify(&public_key, &cert_digest[..], &sign.bytes));
-
         }
+
+        // If present check the certificate
+        if let Some(aggr) = &self.aggregate_signature {
+            ensure!(aggr.verify(&committee, &cert_digest));
+        }
+
         Ok(())
     }
 
@@ -215,6 +247,11 @@ impl PartialCertificate {
             if !self.signatures.contains_key(addr) {
                 self.signatures.insert(*addr, sig.clone());
             }
+        }
+
+        // Copy a cert if present.
+        if self.aggregate_signature.is_none() && other_certificate.aggregate_signature.is_some() {
+            self.aggregate_signature = other_certificate.aggregate_signature.clone();
         }
 
         Ok(())
@@ -243,6 +280,48 @@ impl PartialCertificate {
 
         return true;
     }
+
+    pub fn make_cert(&mut self, committee: &VotingPower) {
+        if self.aggregate_signature.is_some() {
+            // Already have a cert, just strip all other signatures.
+            self.strip_other_signatures();
+            return;
+        }
+
+        if committee.has_quorum(self.signatures.iter()) {
+            // Enough evidence to make a cert.
+            let mut bv = bitvec![0;committee.num_keys()];
+            let mut signatures = Vec::with_capacity(committee.num_keys());
+
+            for (addr, sig) in &self.signatures {
+                *bv.get_mut(*addr as usize).unwrap() = true;
+                signatures.push(sig.bytes.clone());
+            }
+
+            let sig = aggregate_signature(&signatures[..]).unwrap();
+            self.aggregate_signature = Some(AggregateSignature {
+                signers: bv,
+                signature: SignatureBytes { bytes: sig },
+            });
+
+            self.strip_other_signatures();
+            return;
+        }
+    }
+
+    pub fn has_quorum(&self, committee: &VotingPower) -> bool {
+        if committee.has_quorum(self.signatures.iter()) {
+            return true;
+        }
+
+        if let Some(cert) = &self.aggregate_signature {
+            if cert.has_quorum(&committee) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
 
 /// A partial certificate with enough support to ensure quorum intersection.
@@ -253,7 +332,7 @@ pub struct BlockCertificate(pub PartialCertificate);
 mod tests {
 
     use super::*;
-    use crate::crypto::{ key_gen, };
+    use crate::crypto::key_gen;
 
     #[test]
     fn make_and_hash_metadata() {
