@@ -177,7 +177,7 @@ impl SealCoreState {
                                 .block_certificates
                                 .get_mut(a)
                                 .unwrap()
-                                .add_own_signature(&self.my_address, &self.my_secret)?;
+                                .add_own_signature(&self.committee, &self.my_address, &self.my_secret)?;
                         }
                     }
                 }

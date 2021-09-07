@@ -104,11 +104,12 @@ impl DriverRequest {
     #[cfg(test)]
     pub fn sign_all_headers(
         &mut self,
+        votes: &VotingPower,
         address: &Address,
         secret: &SigningSecretKey,
     ) -> Fallible<()> {
         for (_addr, cert) in &mut self.block_certificates {
-            cert.add_own_signature(address, secret)?;
+            cert.add_own_signature(votes, address, secret)?;
         }
         Ok(())
     }
@@ -407,16 +408,16 @@ mod tests {
 
         assert!(empty.check_request_valid(&votes).unwrap() == RequestValidState::HeaderQuorum(0));
 
-        empty.sign_all_headers(&0, &sk0).unwrap();
+        empty.sign_all_headers(&votes, &0, &sk0).unwrap();
         assert!(empty.check_request_valid(&votes).is_err());
 
-        empty.sign_all_headers(&1, &sk1).unwrap();
+        empty.sign_all_headers(&votes, &1, &sk1).unwrap();
         assert!(empty.check_request_valid(&votes).is_err());
 
-        empty.sign_all_headers(&2, &sk2).unwrap();
+        empty.sign_all_headers(&votes, &2, &sk2).unwrap();
         assert!(empty.check_request_valid(&votes).unwrap() == RequestValidState::CertQuorum(0));
 
-        empty.sign_all_headers(&3, &sk3).unwrap();
+        empty.sign_all_headers(&votes, &3, &sk3).unwrap();
         assert!(empty.check_request_valid(&votes).unwrap() == RequestValidState::CertQuorum(0));
 
         empty.block_data.remove(&0);
@@ -469,9 +470,9 @@ mod tests {
 
         assert!(empty.check_request_valid(&votes).unwrap() == RequestValidState::HeaderQuorum(0));
 
-        empty.sign_all_headers(&0, &sk0).unwrap();
-        empty.sign_all_headers(&1, &sk1).unwrap();
-        empty.sign_all_headers(&2, &sk2).unwrap();
+        empty.sign_all_headers(&votes, &0, &sk0).unwrap();
+        empty.sign_all_headers(&votes, &1, &sk1).unwrap();
+        empty.sign_all_headers(&votes, &2, &sk2).unwrap();
         assert!(empty.check_request_valid(&votes).unwrap() == RequestValidState::CertQuorum(0));
 
         let round_zero_certs = empty.extract_full_certs(&votes);

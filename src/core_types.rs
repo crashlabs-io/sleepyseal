@@ -136,6 +136,14 @@ impl BlockHeader {
     }
 }
 
+use bitvec::vec::BitVec;
+
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+pub struct SignatureEvidence {
+    signers : BitVec,
+    aggregate_signature : SignatureBytes,
+}
+
 /// A partial certificate containing one or more signatures for a block header.
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct PartialCertificate {
@@ -145,6 +153,7 @@ pub struct PartialCertificate {
     pub block_header_digest: BlockHeaderDigest,
     /// The signatures supporting this certificate
     pub signatures: BTreeMap<Address, SignatureBytes>,
+    // pub signatures : Vec<SignatureEvidence>,
 }
 
 impl PartialCertificate {
@@ -166,6 +175,7 @@ impl PartialCertificate {
     /// Add a signature to a certificate.
     pub fn add_own_signature(
         &mut self,
+        committee: &VotingPower,
         signer: &Address,
         _secret: &SigningSecretKey,
     ) -> Fallible<()> {
@@ -319,7 +329,7 @@ mod tests {
         // Add more signatures
         let mut cert = bh.creator_sign_header(&sk)?;
         let (_, sk2) = key_gen();
-        cert.add_own_signature(&0, &sk2)?;
+        cert.add_own_signature(&votes, &0, &sk2)?;
 
         // Check the signature work
         cert.all_signatures_valid(&votes)?;
