@@ -19,6 +19,12 @@ pub struct DriverCore {
     latest_round: RoundID,
     /// The driver responses received about the latest round.
     latest_states: HashMap<Address, DriverRequest>,
+
+    // Temps for round
+    block_lock: HashMap<Address, (BlockHeader, BlockData)>,
+    cert_lock: HashMap<BlockHeaderDigest, PartialCertificate>,
+    prev_ready_certs: HashMap<Address, BlockCertificate>,
+    ready_certs: HashMap<Address, PartialCertificate>,
 }
 
 impl DriverCore {
@@ -28,6 +34,12 @@ impl DriverCore {
             committee,
             latest_round: 0,
             latest_states: HashMap::new(),
+
+            // Temp state
+            block_lock: HashMap::new(),
+            cert_lock: HashMap::new(),
+            prev_ready_certs: HashMap::new(),
+            ready_certs: HashMap::new(),
         }
     }
 
@@ -47,11 +59,73 @@ impl DriverCore {
             self.latest_round = response.round;
             self.latest_states.clear();
             // TODO: keep track of old to updates them.
+
+            self.block_lock.clear();
+            self.cert_lock.clear();
+            self.prev_ready_certs.clear();
+            self.ready_certs.clear();
         }
 
         assert!(response.round == self.latest_round);
         let resp_copy: DriverRequest = response.clone();
         self.latest_states.insert(source, resp_copy);
+
+        for (addr, cert) in &response.block_certificates {
+            // If we already have a full cert ignore.
+            if self.ready_certs.contains_key(addr) {
+                continue;
+            }
+
+            // We do not have a ready full cert
+            if cert.aggregate_signature.is_some() {
+                self.ready_certs.insert(*addr, cert.clone());
+                continue;
+            }
+
+            // Insert an entry.
+            if !self.cert_lock.contains_key(&cert.block_header_digest) {
+                self.cert_lock
+                    .insert(cert.block_header_digest.clone(), cert.clone());
+            } else {
+                let entry = self.cert_lock.get_mut(&cert.block_header_digest).unwrap();
+                entry.merge_from(cert)?;
+            }
+
+            let entry = self.cert_lock.get_mut(&cert.block_header_digest).unwrap();
+            if entry.has_quorum(&self.committee) {
+                entry.make_cert(&self.committee);
+                self.ready_certs.insert(*addr, entry.clone());
+
+                // Now clean up any equivocating blocks we have a lock on
+                // If we have a cert for another block from the same sender, ignore:
+                if self.block_lock.contains_key(addr) {
+                    if !entry.matches_block(&self.block_lock[addr].0) {
+                        self.block_lock.remove(addr);
+                    }
+                }
+            }
+        }
+
+        // Update the temporaries.
+        for (addr, prev_cert) in &response.previous_block_certificates {
+            if !self.prev_ready_certs.contains_key(addr) {
+                self.prev_ready_certs.insert(*addr, prev_cert.clone());
+            }
+        }
+
+        for (addr, block_header) in &response.block_headers {
+            if !self.block_lock.contains_key(addr) {
+                // If we have a cert for another block from the same sender, ignore:
+                if self.ready_certs.contains_key(addr) {
+                    if !self.ready_certs[addr].matches_block(&block_header) {
+                        continue;
+                    }
+                }
+
+                let data = response.block_data[addr].clone();
+                self.block_lock.insert(*addr, (block_header.clone(), data));
+            }
+        }
 
         Ok(())
     }
@@ -84,78 +158,28 @@ impl DriverCore {
     pub fn create_aggregate_response(&self) -> Option<DriverRequest> {
         let mut empty = DriverRequest::empty(self.instance, self.latest_round);
 
-        // First create a list of all the full certificates.
-        let mut aggregate_certs: HashMap<BlockHeaderDigest, PartialCertificate> = HashMap::new();
-        for (_, state) in &self.latest_states {
-            for (_, cert) in &state.block_certificates {
-                if aggregate_certs.contains_key(&cert.block_header_digest) {
-                    let _err = aggregate_certs
-                        .get_mut(&cert.block_header_digest)
-                        .unwrap()
-                        .merge_from(cert);
-                } else {
-                    aggregate_certs.insert(cert.block_header_digest.clone(), cert.clone());
-                }
-            }
-        }
-
-        // Do we have a quorum of full certs?
-        let full_certs: HashMap<Address, PartialCertificate> = aggregate_certs
-            .iter()
-            .filter(|(_h, c)| c.has_quorum(&self.committee))
-            .map(|(_h, c)| {
-                (c.block_metadata.creator, {
-                    let mut cert = c.clone();
-                    cert.make_cert(&self.committee);
-                    cert
-                })
-            })
-            .collect();
-
         // If we have a quorum of full certificates the request simply lists them
         // to move passive cores to the next round.
-        if self.committee.has_quorum(full_certs.iter()) {
-            empty.block_certificates = full_certs;
+        if self.committee.has_quorum(self.ready_certs.iter()) {
+            empty.block_certificates = self.ready_certs.clone();
             return Some(empty);
         }
 
-        // We may need to send a list of blocks, instead
-        for (_, state) in &self.latest_states {
-            for (a, block) in &state.block_headers {
-                let creator = &block.block_metadata.creator;
-
-                // If we have a cert for another block from the same sender, ignore:
-                if full_certs.contains_key(creator) {
-                    if !full_certs[creator].matches_block(&block) {
-                        continue;
-                    }
-                }
-
-                // Strip all the signatures.
-                let mut cert = state.block_certificates.get(a).unwrap().clone();
+        if self.committee.has_quorum(self.block_lock.iter()) {
+            for (_a, (block, data)) in &self.block_lock {
+                // Strip all the signatures, except creator's.
+                let mut cert = self.cert_lock.get(&block.digest()).unwrap().clone();
                 cert.strip_other_signatures();
+                cert.aggregate_signature = None;
 
                 // We ignore errors.
-                let _ = empty.insert_block(
-                    state.block_data.get(a).unwrap().clone(),
-                    state.block_headers.get(a).unwrap().clone(),
-                    cert,
-                    HashMap::new(),
-                );
+                let _ = empty.insert_block(data.clone(), block.clone(), cert, HashMap::new());
             }
             empty
                 .previous_block_certificates
-                .extend(state.previous_block_certificates.clone());
-        }
+                .extend(self.prev_ready_certs.clone());
 
-        // Do we have a quorum of headers?
-        if self.committee.has_quorum(empty.block_headers.iter()) {
-
-            for (addr, cert) in &mut empty.previous_block_certificates {
-                cert.0.make_cert(&self.committee);
-            }
-
-            return Some(empty); // Return the quorum of headers to gather more signatures.
+            return Some(empty);
         }
 
         None
@@ -454,6 +478,9 @@ mod tests {
         assert!(latest > 50);
     }
 
+    use std::thread::sleep;
+    use std::time::{Duration, Instant};
+
     #[test]
     fn test_progress_at_random_many_nodes() {
         let mut keys_vec = Vec::new();
@@ -484,24 +511,37 @@ mod tests {
         // The client state
         let mut latest = 0;
         let mut driver = DriverCore::new(instance, votes.clone());
-        for r in 0..200 {
+        for r in 0..2000 {
             let i = r % keys_vec.len();
+
+            //let vstart = Instant::now();
 
             driver
                 .add_response(i as u16, &states_vec[i].current_round_data)
                 .unwrap();
 
+            // println!("(1) Response: {}", vstart.elapsed().as_millis());
+            let vstart = Instant::now();
+
             if let Some(cert_message) = driver.create_aggregate_response() {
                 // Measure size
+
+                println!("(2) Aggregate: {}", vstart.elapsed().as_millis());
+                let vstart = Instant::now();
+
                 let naive_enc = &cert_message.naive_encode();
                 let compress_enc = &cert_message.compressed_encode();
 
+                println!("(3) Serialize: {}", vstart.elapsed().as_millis());
+                let vstart = Instant::now();
+
+                /*
                 let mut req_minus_sigs = cert_message.clone();
                 for (_addr, cert) in &mut req_minus_sigs.previous_block_certificates {
-                    cert.0.signatures.clear();
+                    cert.0.make_cert(&votes);
                 }
                 for (_addr, cert) in &mut req_minus_sigs.block_certificates {
-                    cert.signatures.clear();
+                    cert.make_cert(&votes);
                 }
                 let no_sig_enc = req_minus_sigs.compressed_encode();
 
@@ -509,18 +549,23 @@ mod tests {
                     block.block_certificates.clear();
                 }
                 let no_cert = req_minus_sigs.compressed_encode();
-
+                */
                 println!("Full: {} Compress: {}", naive_enc.len(), compress_enc.len());
+
+                /*
                 println!(
                     "No sigs compress: {} No certs compress: {}",
                     no_sig_enc.len(),
                     no_cert.len()
                 );
+                */
 
                 // Update state
                 states_vec[i].update_state(&cert_message).unwrap();
                 let new_round_id = states_vec[i].current_round_data.round + 1;
                 let _ = states_vec[i].advance_to_new_round(new_round_id);
+
+                println!("(4) Process: {}", vstart.elapsed().as_millis());
             }
 
             println!(

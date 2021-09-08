@@ -57,6 +57,10 @@ pub fn verify(public_key: &PublicKey, message: &[u8], signature: &Signature) -> 
 }
 
 pub fn aggregate_signature(many_signatures: &[Signature]) -> Result<Signature, ()> {
+    if many_signatures.len() == 1 {
+        return Ok(many_signatures[0].clone());
+    }
+
     let mut accumulator: G1Projective = G1Projective::identity().into();
 
     for one_signature in many_signatures {

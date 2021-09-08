@@ -284,7 +284,9 @@ impl PartialCertificate {
     pub fn make_cert(&mut self, committee: &VotingPower) {
         if self.aggregate_signature.is_some() {
             // Already have a cert, just strip all other signatures.
-            self.strip_other_signatures();
+            if self.signatures.len() > 1 {
+                self.strip_other_signatures();
+            }
             return;
         }
 
@@ -310,14 +312,14 @@ impl PartialCertificate {
     }
 
     pub fn has_quorum(&self, committee: &VotingPower) -> bool {
-        if committee.has_quorum(self.signatures.iter()) {
-            return true;
-        }
-
         if let Some(cert) = &self.aggregate_signature {
             if cert.has_quorum(&committee) {
                 return true;
             }
+        }
+
+        if committee.has_quorum(self.signatures.iter()) {
+            return true;
         }
 
         return false;
