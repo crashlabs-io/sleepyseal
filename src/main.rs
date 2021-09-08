@@ -6,7 +6,6 @@ pub mod driver;
 pub mod mempool;
 pub mod messages;
 
-use bitvec::prelude::*;
 
 #[macro_use]
 extern crate serde_big_array;

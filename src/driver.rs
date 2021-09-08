@@ -478,15 +478,14 @@ mod tests {
         assert!(latest > 50);
     }
 
-    use std::thread::sleep;
-    use std::time::{Duration, Instant};
+    use std::time::{Instant, };
 
     #[test]
     fn test_progress_at_random_many_nodes() {
         let mut keys_vec = Vec::new();
         let mut states_vec = Vec::new();
 
-        let f = 2;
+        let f = 3;
         for _ in 0..(3 * f + 1) {
             let (pk, sk) = key_gen();
             keys_vec.push((pk, sk))

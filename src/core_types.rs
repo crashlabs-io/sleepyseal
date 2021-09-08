@@ -152,8 +152,8 @@ impl AggregateSignature {
             .signers
             .iter()
             .enumerate()
-            .filter(|(id, bit)| **bit)
-            .map(|(id, bit)| ((id as Address), 0usize))
+            .filter(|(_id, bit)| **bit)
+            .map(|(id, _bit)| ((id as Address), 0usize))
             .collect();
         return votes.has_quorum(signers.iter());
     }
@@ -163,8 +163,8 @@ impl AggregateSignature {
             .signers
             .iter()
             .enumerate()
-            .filter(|(id, bit)| **bit)
-            .map(|(id, bit)| votes.get_key(&(id as Address)))
+            .filter(|(_id, bit)| **bit)
+            .map(|(id, _bit)| votes.get_key(&(id as Address)))
             .collect();
 
         return verify_aggregate_signature(&signers[..], message, &self.signature.bytes);
@@ -203,13 +203,13 @@ impl PartialCertificate {
     /// Add a signature to a certificate.
     pub fn add_own_signature(
         &mut self,
-        committee: &VotingPower,
+        _committee: &VotingPower,
         signer: &Address,
-        _secret: &SigningSecretKey,
+        secret: &SigningSecretKey,
     ) -> Fallible<()> {
         if !self.signatures.contains_key(signer) {
             let mut sig = [0; 48];
-            sign(&_secret, &self.digest(), &mut sig);
+            sign(&secret, &self.digest(), &mut sig);
 
             self.signatures
                 .insert(signer.clone(), SignatureBytes::new(sig));
