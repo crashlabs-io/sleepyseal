@@ -326,7 +326,7 @@ impl DriverRequest {
     pub fn extract_progress_request(&self) -> Fallible<DriverRequest> {
         ensure!(self.round > 0);
         let block_certificates = self.extract_prev_certs();
-        ensure!(block_certificates.len() > 0);
+        ensure!(!block_certificates.is_empty());
         Ok(DriverRequest {
             instance: self.instance,
             round: self.round - 1,

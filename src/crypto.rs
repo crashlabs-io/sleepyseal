@@ -12,6 +12,7 @@ pub type Signature = [u8; 48];
 
 const DOMAIN: [u8; 12] = [5u8; 12];
 
+/// Key generation for the BLS scheme.
 pub fn key_gen() -> (PublicKey, SecretKey) {
     let g2 = bls12_381::G2Affine::generator();
 
@@ -26,6 +27,7 @@ pub fn key_gen() -> (PublicKey, SecretKey) {
     (public_key, secret_key)
 }
 
+/// BLS signature.
 pub fn sign(secret_key: &SecretKey, message: &[u8], signature: &mut Signature) {
     let g1_msg_proj = <G1Projective as HashToCurve<ExpandMsgXmd<sha2::Sha256>>>::encode_to_curve(
         &message, &DOMAIN,
@@ -35,6 +37,7 @@ pub fn sign(secret_key: &SecretKey, message: &[u8], signature: &mut Signature) {
     *signature = sig.to_compressed();
 }
 
+/// Verify the BLS signature.
 pub fn verify(public_key: &PublicKey, message: &[u8], signature: &Signature) -> bool {
     let sig_g1 = G1Affine::from_compressed(&signature);
     let g2 = bls12_381::G2Affine::generator();
@@ -56,6 +59,7 @@ pub fn verify(public_key: &PublicKey, message: &[u8], signature: &Signature) -> 
     return lhs == rhs;
 }
 
+/// Aggregate multiple BLS signatures.
 pub fn aggregate_signature(many_signatures: &[Signature]) -> Result<Signature, ()> {
     if many_signatures.len() == 1 {
         return Ok(many_signatures[0].clone());
@@ -78,6 +82,7 @@ pub fn aggregate_signature(many_signatures: &[Signature]) -> Result<Signature, (
     Ok(affine_accumulator.to_compressed())
 }
 
+/// Verify an aggregate signature.
 pub fn verify_aggregate_signature(
     public_keys: &[&PublicKey],
     message: &[u8],
