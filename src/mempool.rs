@@ -19,7 +19,7 @@ pub struct ClientAccount {
     balance: GasUnit,
 }
 
-/// A structure represneting a transaction that is either waiting
+/// A structure representing a transaction that is either waiting
 /// to be included in a block, or included and waiting for a
 /// confirmation that the block is included / excluded.
 pub struct PendingTransaction {
@@ -39,6 +39,15 @@ pub struct Mempool {
 }
 
 impl Mempool {
+
+    pub fn new() -> Mempool {
+        Mempool {
+            client_accounts : HashMap::new(),
+            pending_inclusion : Vec::new(),
+            awaiting_confirmation : Vec::new(),
+        }
+    }
+
     /// Include a transactions into the list of pending transactions, and adjusts
     /// (down) the user account balance.
     pub fn include_transaction(&mut self, tx: PendingTransaction) -> Fallible<()> {

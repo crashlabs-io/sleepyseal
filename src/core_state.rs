@@ -3,10 +3,13 @@
 use crate::base_types::*;
 use crate::core_types::*;
 use crate::messages::*;
+use crate::mempool::Mempool;
 
 use failure::{ensure, Fallible};
 use std::collections::{BTreeMap, HashMap};
 use std::mem::replace;
+
+
 
 /// A structure to keep track of the progress resulting from a driver operation.
 #[derive(Default)]
@@ -215,7 +218,7 @@ impl SealCoreState {
     }
 
     /// Advance to new round and insert new block to initiate it.
-    pub fn advance_to_new_round(&mut self, new_round: RoundID) -> Fallible<()> {
+    pub fn advance_to_new_round(&mut self, new_round: RoundID, mempool : &mut Mempool) -> Fallible<()> {
         // Check that we are not already past the round, this can happen if we receive
         // lots and lots of updates at the same time.
         ensure!(
@@ -231,7 +234,7 @@ impl SealCoreState {
         );
 
         // Make a new block and advance the round.
-        let data = BlockData::from(b"XXX".to_vec());
+        let data = BlockData::from(mempool.get_data_block(new_round, 100_000));
         let new_current_round_data =
             DriverRequest::empty(self.current_round_data.instance, new_round);
         self.switch_and_archive_state(new_current_round_data);

@@ -19,6 +19,8 @@ pub struct DriverCore {
     latest_round: RoundID,
     /// The driver responses received about the latest round.
     latest_states: HashMap<Address, DriverRequest>,
+    /// Whether the instance accepts new transactions.
+    is_open: bool,
 
     // Temps for round
     block_lock: HashMap<Address, (BlockHeader, BlockData)>,
@@ -34,6 +36,7 @@ impl DriverCore {
             committee,
             latest_round: 0,
             latest_states: HashMap::new(),
+            is_open: true,
 
             // Temp state
             block_lock: HashMap::new(),
@@ -264,6 +267,7 @@ mod tests {
     use super::*;
     use crate::core_state::*;
     use crate::crypto::key_gen;
+    use crate::mempool::Mempool;
 
     #[test]
     fn sim_four_authorities_client() {
@@ -334,12 +338,14 @@ mod tests {
                 == RequestValidState::CertQuorum(0)
         );
 
-        assert!(core3.advance_to_new_round(1).is_err());
+        let mut mp = Mempool::new();
+
+        assert!(core3.advance_to_new_round(1, &mut mp).is_err());
         assert!(core3.update_state(&cert_message).is_ok());
         assert!(core3.current_round_data.round == 0);
 
         // After we explicitly advance, now it is 1
-        assert!(core3.advance_to_new_round(1).is_ok());
+        assert!(core3.advance_to_new_round(1, &mut mp).is_ok());
         assert!(core3.current_round_data.round == 1);
 
         // Now add the response from 1
@@ -380,6 +386,8 @@ mod tests {
             states_vec.push(core);
         }
 
+        let mut mp = Mempool::new();
+
         // The client state
         let mut latest = 0;
         let mut driver = DriverCore::new(instance, votes.clone());
@@ -410,7 +418,7 @@ mod tests {
             if let Some(cert_message) = driver.create_aggregate_response() {
                 states_vec[i].update_state(&cert_message).unwrap();
                 let new_round_id = states_vec[i].current_round_data.round + 1;
-                let _ = states_vec[i].advance_to_new_round(new_round_id);
+                let _ = states_vec[i].advance_to_new_round(new_round_id, &mut mp);
             }
 
             println!(
@@ -453,6 +461,8 @@ mod tests {
             states_vec.push(core);
         }
 
+        let mut mp = Mempool::new();
+
         // The client state
         let mut latest = 0;
         let mut driver = DriverCore::new(instance, votes.clone());
@@ -465,7 +475,7 @@ mod tests {
             if let Some(cert_message) = driver.create_aggregate_response() {
                 states_vec[i].update_state(&cert_message).unwrap();
                 let new_round_id = states_vec[i].current_round_data.round + 1;
-                let _ = states_vec[i].advance_to_new_round(new_round_id);
+                let _ = states_vec[i].advance_to_new_round(new_round_id, &mut mp);
             }
 
             println!(
@@ -478,7 +488,7 @@ mod tests {
         assert!(latest > 50);
     }
 
-    use std::time::{Instant, };
+    use std::time::Instant;
 
     #[test]
     fn test_progress_at_random_many_nodes() {
@@ -510,6 +520,9 @@ mod tests {
         // The client state
         let mut latest = 0;
         let mut driver = DriverCore::new(instance, votes.clone());
+
+        let mut mp = Mempool::new();
+
         for r in 0..2000 {
             let i = r % keys_vec.len();
 
@@ -562,7 +575,7 @@ mod tests {
                 // Update state
                 states_vec[i].update_state(&cert_message).unwrap();
                 let new_round_id = states_vec[i].current_round_data.round + 1;
-                let _ = states_vec[i].advance_to_new_round(new_round_id);
+                let _ = states_vec[i].advance_to_new_round(new_round_id, &mut mp);
 
                 println!("(4) Process: {}", vstart.elapsed().as_millis());
             }

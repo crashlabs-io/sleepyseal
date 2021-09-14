@@ -13,6 +13,21 @@ use serde::{Deserialize, Serialize};
 use crate::base_types::*;
 use crate::core_types::*;
 
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+pub struct SummaryRequest {
+    /// The instance identifier of the consensus.
+    pub instance: InstanceID,
+    /// The Narwhal mempool round for this request.
+    pub round: RoundID,
+
+    /// All block headers for this round.
+    pub block_headers_hash: HashMap<Address, BlockHeaderDigest>,
+    /// All block certificates for this round.
+    pub block_certificates_hash: HashMap<Address, BlockHeaderDigest>,
+    /// The previous block certificates
+    pub previous_block_certificates: HashMap<Address, BlockHeaderDigest>,
+}
+
 /// Represents a client/driver request, containing an update to the consensus state
 /// of a node. Also used to hold the current state within a node.
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
