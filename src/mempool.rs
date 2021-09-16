@@ -4,7 +4,7 @@
 //! awaiting confirmation. As well as accounting and credit data for each
 //! client.
 
-use crate::base_types::{Address, RoundID};
+use crate::base_types::{Address, InstanceID, RoundID};
 use failure::{bail, ensure, Fallible};
 
 use std::collections::HashMap;
@@ -23,11 +23,29 @@ pub struct ClientAccount {
 /// to be included in a block, or included and waiting for a
 /// confirmation that the block is included / excluded.
 pub struct PendingTransaction {
+    instance: InstanceID,
     _time_received: u64,
     client_origin: Address,
     transaction: Vec<u8>,
     inclusion_round: Option<RoundID>,
     gas_per_byte: GasUnit,
+}
+
+impl PendingTransaction {
+    pub fn new(
+        instance: InstanceID,
+        client_origin: Address,
+        transaction: Vec<u8>,
+    ) -> PendingTransaction {
+        PendingTransaction {
+            instance,
+            _time_received: 0,
+            client_origin,
+            transaction,
+            inclusion_round: None,
+            gas_per_byte: 0,
+        }
+    }
 }
 
 /// A mempool holds client balances, and transactions waiting to be included
@@ -39,12 +57,11 @@ pub struct Mempool {
 }
 
 impl Mempool {
-
     pub fn new() -> Mempool {
         Mempool {
-            client_accounts : HashMap::new(),
-            pending_inclusion : Vec::new(),
-            awaiting_confirmation : Vec::new(),
+            client_accounts: HashMap::new(),
+            pending_inclusion: Vec::new(),
+            awaiting_confirmation: Vec::new(),
         }
     }
 

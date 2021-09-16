@@ -2,14 +2,12 @@
 
 use crate::base_types::*;
 use crate::core_types::*;
-use crate::messages::*;
 use crate::mempool::Mempool;
+use crate::messages::*;
 
 use failure::{ensure, Fallible};
 use std::collections::{BTreeMap, HashMap};
 use std::mem::replace;
-
-
 
 /// A structure to keep track of the progress resulting from a driver operation.
 #[derive(Default)]
@@ -218,7 +216,11 @@ impl SealCoreState {
     }
 
     /// Advance to new round and insert new block to initiate it.
-    pub fn advance_to_new_round(&mut self, new_round: RoundID, mempool : &mut Mempool) -> Fallible<()> {
+    pub fn advance_to_new_round(
+        &mut self,
+        new_round: RoundID,
+        mempool: &mut Mempool,
+    ) -> Fallible<()> {
         // Check that we are not already past the round, this can happen if we receive
         // lots and lots of updates at the same time.
         ensure!(

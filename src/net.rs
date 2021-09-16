@@ -1,9 +1,9 @@
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
-use crate::base_types::{Address, InstanceID};
+use crate::base_types::{Address, BlockData, InstanceID, SigningSecretKey, VotingPower};
 use crate::core_state::SealCoreState;
-use crate::mempool::Mempool;
+use crate::mempool::{Mempool, PendingTransaction};
 use crate::messages::{DriverRequest, SummaryRequest};
 
 use std::collections::HashMap;
@@ -11,23 +11,49 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
+pub type MempoolPointer = Arc<Mutex<Mempool>>;
+pub type StatePointer = Arc<Mutex<SealCoreState>>;
 
-#[derive(Clone, )]
+#[derive(Clone)]
 pub struct MemDB {
-    instances: Arc<Mutex<HashMap<InstanceID, (Arc<Mutex<Mempool>>, Arc<Mutex<SealCoreState>>)>>>,
+    instances: Arc<Mutex<HashMap<InstanceID, (MempoolPointer, StatePointer)>>>,
 }
 
 impl MemDB {
-
     pub fn new() -> MemDB {
         MemDB {
-            instances : Arc::new(Mutex::new(HashMap::new())),
+            instances: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
+    pub fn insert_instance(
+        &self,
+        my_address: Address,
+        my_secret: SigningSecretKey,
+        committee: VotingPower,
+        instance: InstanceID,
+        data: BlockData,
+    ) -> Result<(MempoolPointer, StatePointer), XError> {
+        let mempool = Arc::new(Mutex::new(Mempool::new()));
+        let state = Arc::new(Mutex::new(SealCoreState::init(
+            my_address, my_secret, committee, instance, data,
+        )));
+
+        let mut map = self.instances.lock().map_err(|_e| XError::LockError {
+            name: "Lock failed on init.".into(),
+        })?;
+        if let Some(values) = map.get(&instance) {
+            return Ok(values.clone());
+        } else {
+            map.insert(instance, (mempool.clone(), state.clone()));
+        }
+
+        Ok((mempool, state))
+    }
+
     /// Get a counted reference to the mempool for an instance.
-    pub fn get_mempool(&self, instance: InstanceID) -> Result<Option<Arc<Mutex<Mempool>>>, ()> {
-        let inner_entry = self.instances.lock().map_err(|e| ())?;
+    pub fn get_mempool(&self, instance: InstanceID) -> Result<Option<MempoolPointer>, ()> {
+        let inner_entry = self.instances.lock().map_err(|_e| ())?;
         if let Some((mempool, _state)) = inner_entry.get(&instance) {
             return Ok(Some(mempool.clone()));
         } else {
@@ -36,8 +62,8 @@ impl MemDB {
     }
 
     /// Get a counted reference to the state of an instance.
-    pub fn get_state(&self, instance: InstanceID) -> Result<Option<Arc<Mutex<SealCoreState>>>, ()> {
-        let inner_entry = self.instances.lock().map_err(|e| ())?;
+    pub fn get_state(&self, instance: InstanceID) -> Result<Option<StatePointer>, ()> {
+        let inner_entry = self.instances.lock().map_err(|_e| ())?;
         if let Some((_mempool, state)) = inner_entry.get(&instance) {
             return Ok(Some(state.clone()));
         } else {
@@ -66,11 +92,19 @@ impl MemDB {
 pub enum Message {
     /// A transaction from an originator, with some data
     Transaction(Address, InstanceID, Vec<u8>),
+    TransactionStored,
+    /// Request a Summary of the state for an instance.
+    SummaryRequest(InstanceID),
+    /// Respond with the Summary of the state for an instance.
+    SummaryResponse(SummaryRequest),
+    /// Full State Read / Update
+    StateRequest(InstanceID),
+    StateResponse(DriverRequest),
     /// State update
-    Update(DriverRequest),
-    /// Summary
-    StateSummaryResponse(SummaryRequest),
-    StateSummaryRequest,
+    StateUpdate(DriverRequest),
+    UpdateResponse,
+    /// Generic Error
+    Error(XError),
 }
 
 use bincode;
@@ -79,16 +113,47 @@ use futures::SinkExt;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
-pub fn process_message(_received: Message, store : MemDB) -> Result<Message, XError> {
-    Ok(Message::StateSummaryRequest)
+pub fn process_message(_received: Message, store: MemDB) -> Result<Message, XError> {
+    match _received {
+        Message::Transaction(address, instance, data) => {
+            let tx = PendingTransaction::new(instance, address, data);
+
+            let mempool_ptr = store
+                .get_mempool(instance)
+                .map_err(|_e| XError::GenericError)?;
+            if mempool_ptr.is_none() {
+                return Err(XError::LogicError {
+                    name: "Cannot find this instance.".into(),
+                });
+            }
+            let mempool = mempool_ptr.unwrap(); // .expect("Cannot panic");
+
+            mempool
+                .lock()
+                .map_err(|e| XError::GenericError)?
+                .include_transaction(tx)
+                .map_err(|e| XError::GenericError)?;
+
+            return Ok(Message::TransactionStored);
+        }
+        _ => {}
+    }
+
+    Ok(Message::UpdateResponse)
 }
 
 use failure::Error;
 
-#[derive(Debug, Fail)]
+#[derive(Clone, Debug, Fail, Serialize, Deserialize, PartialEq)]
 pub enum XError {
     #[fail(display = "network error: {}", name)]
     NetWorkError { name: String },
+    #[fail(display = "Lock error: {}", name)]
+    LockError { name: String },
+    #[fail(display = "Logic error: {}", name)]
+    LogicError { name: String },
+    #[fail(display = "GenericError")]
+    GenericError,
 }
 
 async fn main_server(address: &str) -> Result<(), Box<dyn std::error::Error>> {
