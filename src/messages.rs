@@ -25,7 +25,7 @@ pub struct SummaryRequest {
     /// All block certificates for this round.
     pub block_certificates_hash: HashMap<Address, BlockHeaderDigest>,
     /// The previous block certificates
-    pub previous_block_certificates: HashMap<Address, BlockHeaderDigest>,
+    pub previous_block_certificates_hash: HashMap<Address, BlockHeaderDigest>,
 }
 
 /// Represents a client/driver request, containing an update to the consensus state
@@ -64,6 +64,31 @@ impl DriverRequest {
             block_headers: HashMap::new(),
             block_certificates: HashMap::new(),
             previous_block_certificates: HashMap::new(),
+        }
+    }
+
+    /// Produces a summary of the update message, which can also be used to
+    /// tell drivers the state of a core.
+    pub fn summary(&self) -> SummaryRequest {
+        SummaryRequest {
+            instance: self.instance,
+            round: self.round,
+            block_headers_hash: self
+                .block_headers
+                .iter()
+                .map(|(a, b)| (*a, b.digest()))
+                .collect(),
+            block_certificates_hash: self
+                .block_certificates
+                .iter()
+                .filter(|(a, b)| b.aggregate_signature.is_some())
+                .map(|(a, b)| (*a, b.block_header_digest.clone()))
+                .collect(),
+            previous_block_certificates_hash: self
+                .previous_block_certificates
+                .iter()
+                .map(|(a, b)| (*a, b.0.block_header_digest.clone()))
+                .collect(),
         }
     }
 

@@ -93,16 +93,20 @@ pub enum Message {
     /// A transaction from an originator, with some data
     Transaction(Address, InstanceID, Vec<u8>),
     TransactionStored,
+
     /// Request a Summary of the state for an instance.
     SummaryRequest(InstanceID),
     /// Respond with the Summary of the state for an instance.
     SummaryResponse(SummaryRequest),
+
     /// Full State Read / Update
     StateRequest(InstanceID),
     StateResponse(DriverRequest),
+
     /// State update
     StateUpdate(DriverRequest),
     UpdateResponse,
+
     /// Generic Error
     Error(XError),
 }
@@ -113,6 +117,7 @@ use futures::SinkExt;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
+/// The logic to process an incoming transaction.
 pub fn process_transaction(_received: Message, store: &mut MemDB) -> Result<Message, XError> {
     if let Message::Transaction(address, instance, data) = _received {
         let tx = PendingTransaction::new(instance, address, data);
@@ -139,11 +144,37 @@ pub fn process_transaction(_received: Message, store: &mut MemDB) -> Result<Mess
     unreachable!();
 }
 
+/// The logic to process a summary request.
+pub fn process_summary_request(_received: Message, store: &mut MemDB) -> Result<Message, XError> {
+    if let Message::SummaryRequest(instance) = _received {
+        let state_ptr = store
+            .get_state(instance)
+            .map_err(|_e| XError::GenericError)?;
+
+        if state_ptr.is_none() {
+            return Err(XError::LogicError {
+                name: "Cannot find this instance.".into(),
+            });
+        }
+
+        let instance_state = state_ptr.unwrap();
+        let summary = instance_state.lock().map_err(|e| XError::GenericError)?.current_round_data.summary();
+
+        return Ok(Message::SummaryResponse(summary));
+    }
+
+    unreachable!();
+}
+
 pub fn process_message(_received: Message, mut store: MemDB) -> Result<Message, XError> {
     match _received {
         msg @ Message::Transaction(_, _, _) => {
             return process_transaction(msg, &mut store);
+        },
+        msg @ Message::SummaryRequest(_) => {
+            return process_summary_request(msg, &mut store);
         }
+
         _ => {}
     }
 
