@@ -114,7 +114,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 pub fn process_transaction(_received: Message, store: &mut MemDB) -> Result<Message, XError> {
-    if let  Message::Transaction(address, instance, data) = _received {
+    if let Message::Transaction(address, instance, data) = _received {
         let tx = PendingTransaction::new(instance, address, data);
 
         let mempool_ptr = store
@@ -201,13 +201,12 @@ async fn main_server(address: &str) -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
 
     use super::*;
-    use crate::crypto::key_gen;
     use crate::base_types::BlockData;
+    use crate::crypto::key_gen;
 
     #[test]
     fn test_process_transaction() {
@@ -224,19 +223,15 @@ mod tests {
 
         let address = 0;
         let instance = [0; 16];
-        let (mempool, _state) = db.insert_instance(
-                address,
-                sk0,
-                votes,
-                instance,
-                BlockData::from(vec![])).expect("No errors.");
+        let (mempool, _state) = db
+            .insert_instance(address, sk0, votes, instance, BlockData::from(vec![]))
+            .expect("No errors.");
 
-        let tx = Message::Transaction(address, instance, vec![100; 50] );
+        let tx = Message::Transaction(address, instance, vec![100; 50]);
 
         assert!(mempool.lock().unwrap().pending_inclusion.len() == 0);
         let response = process_transaction(tx, &mut db);
-        assert!(response == Ok(Message::TransactionStored) );
+        assert!(response == Ok(Message::TransactionStored));
         assert!(mempool.lock().unwrap().pending_inclusion.len() == 1);
     }
-
 }
