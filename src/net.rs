@@ -113,28 +113,36 @@ use futures::SinkExt;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
-pub fn process_message(_received: Message, store: MemDB) -> Result<Message, XError> {
+pub fn process_transaction(_received: Message, store: &mut MemDB) -> Result<Message, XError> {
+    if let  Message::Transaction(address, instance, data) = _received {
+        let tx = PendingTransaction::new(instance, address, data);
+
+        let mempool_ptr = store
+            .get_mempool(instance)
+            .map_err(|_e| XError::GenericError)?;
+        if mempool_ptr.is_none() {
+            return Err(XError::LogicError {
+                name: "Cannot find this instance.".into(),
+            });
+        }
+        let mempool = mempool_ptr.unwrap(); // .expect("Cannot panic");
+
+        mempool
+            .lock()
+            .map_err(|e| XError::GenericError)?
+            .include_transaction(tx)
+            .map_err(|e| XError::GenericError)?;
+
+        return Ok(Message::TransactionStored);
+    }
+
+    unreachable!();
+}
+
+pub fn process_message(_received: Message, mut store: MemDB) -> Result<Message, XError> {
     match _received {
-        Message::Transaction(address, instance, data) => {
-            let tx = PendingTransaction::new(instance, address, data);
-
-            let mempool_ptr = store
-                .get_mempool(instance)
-                .map_err(|_e| XError::GenericError)?;
-            if mempool_ptr.is_none() {
-                return Err(XError::LogicError {
-                    name: "Cannot find this instance.".into(),
-                });
-            }
-            let mempool = mempool_ptr.unwrap(); // .expect("Cannot panic");
-
-            mempool
-                .lock()
-                .map_err(|e| XError::GenericError)?
-                .include_transaction(tx)
-                .map_err(|e| XError::GenericError)?;
-
-            return Ok(Message::TransactionStored);
+        msg @ Message::Transaction(_, _, _) => {
+            return process_transaction(msg, &mut store);
         }
         _ => {}
     }
@@ -191,4 +199,44 @@ async fn main_server(address: &str) -> Result<(), Box<dyn std::error::Error>> {
             }
         });
     }
+}
+
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use crate::crypto::key_gen;
+    use crate::base_types::BlockData;
+
+    #[test]
+    fn test_process_transaction() {
+        let mut db = MemDB::new();
+
+        let (pk0, sk0) = key_gen();
+        let (pk1, _) = key_gen();
+        let (pk2, _) = key_gen();
+        let (pk3, _) = key_gen();
+
+        let votes: VotingPower = vec![(pk0, 1), (pk1, 1), (pk2, 1), (pk3, 1)]
+            .into_iter()
+            .collect();
+
+        let address = 0;
+        let instance = [0; 16];
+        let (mempool, _state) = db.insert_instance(
+                address,
+                sk0,
+                votes,
+                instance,
+                BlockData::from(vec![])).expect("No errors.");
+
+        let tx = Message::Transaction(address, instance, vec![100; 50] );
+
+        assert!(mempool.lock().unwrap().pending_inclusion.len() == 0);
+        let response = process_transaction(tx, &mut db);
+        assert!(response == Ok(Message::TransactionStored) );
+        assert!(mempool.lock().unwrap().pending_inclusion.len() == 1);
+    }
+
 }

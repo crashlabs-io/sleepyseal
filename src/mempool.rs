@@ -51,9 +51,9 @@ impl PendingTransaction {
 /// A mempool holds client balances, and transactions waiting to be included
 /// or confirmed.
 pub struct Mempool {
-    client_accounts: HashMap<Address, ClientAccount>,
-    pending_inclusion: Vec<PendingTransaction>,
-    awaiting_confirmation: Vec<PendingTransaction>,
+    pub client_accounts: HashMap<Address, ClientAccount>,
+    pub pending_inclusion: Vec<PendingTransaction>,
+    pub awaiting_confirmation: Vec<PendingTransaction>,
 }
 
 impl Mempool {
