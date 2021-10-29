@@ -265,4 +265,36 @@ mod tests {
         assert!(response == Ok(Message::TransactionStored));
         assert!(mempool.lock().unwrap().pending_inclusion.len() == 1);
     }
+
+    #[test]
+    fn test_process_summary() {
+        let mut db = MemDB::new();
+
+        let (pk0, sk0) = key_gen();
+        let (pk1, _) = key_gen();
+        let (pk2, _) = key_gen();
+        let (pk3, _) = key_gen();
+
+        let votes: VotingPower = vec![(pk0, 1), (pk1, 1), (pk2, 1), (pk3, 1)]
+            .into_iter()
+            .collect();
+
+        let address = 0;
+        let instance = [0; 16];
+        let (mempool, _state) = db
+            .insert_instance(address, sk0, votes, instance, BlockData::from(vec![]))
+            .expect("No errors.");
+
+        let tx = Message::SummaryRequest(instance);
+
+        let response = process_summary_request(tx, &mut db);
+        match response {
+            Ok(Message::SummaryResponse(response)) => {
+                assert!(response.instance == instance);
+                assert!(response.round == 0);
+            } 
+            _ => { assert!(false) },
+        }
+
+    }
 }

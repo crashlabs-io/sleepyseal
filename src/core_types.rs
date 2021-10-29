@@ -228,8 +228,8 @@ impl PartialCertificate {
         }
 
         // If present check the certificate
-        if let Some(aggr) = &self.aggregate_signature {
-            ensure!(aggr.verify(&committee, &cert_digest));
+        if let Some(aggregate) = &self.aggregate_signature {
+            ensure!(aggregate.verify(&committee, &cert_digest));
         }
 
         Ok(())
